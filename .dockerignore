@@ -1,0 +1,23 @@
+# Dependencias (se instalan dentro del contenedor)
+node_modules
+
+# Build artifacts
+.next
+out
+
+# Control de versiones
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentación
+README.md
