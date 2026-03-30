@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NDT Frontend - Docker Development Environment
 
-## Getting Started
+Este es el entorno interactivo de desarrollo para el **Frontend (Next.js)** del sistema LIMS NDT.
+Se encuentra pre-configurado para correr de forma **100% aislada** en su propio orquestador de Docker.
 
-First, run the development server:
+## Setup Rápido (100% Automático)
+
+No necesitas instalar Node.js ni npm localmente. Solo teniendo **Docker** podrás arrancar.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# 1. Posicionate en la carpeta del repositorio
+cd NDT_Frontend
+
+# 2. Levantar el proyecto (esto instalará los node_modules automáticamente)
+docker compose up -d --build
+
+# 3. ¡Listo! Abre en tu navegador
+# 👉 http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+> **¿Cómo funciona esto de forma automática?**
+> El archivo `docker-compose.yml` de este repositorio está configurado para ejecutar el comando `npm install && npm run dev` al encenderse.
+> Por lo tanto, si clonas el proyecto sin `node_modules`, Docker los descargará durante el arranque.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Entorno y API
+Por defecto, este entorno de frontend buscará la API del backend en tu máquina local en el puerto **8080**.
+Esto se configura en tu archivo automático `.env.development`:
+```
+NEXT_PUBLIC_API_URL=http://localhost:8080/api
+```
+*(Asegúrate de tener también clonado y corriendo el `NDT_Backend` para probar fullstack).*
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Comandos Útiles de Docker
 
-## Learn More
+Como no tienes Node instalado localmente (o decides usar directamente el de Docker para unificar versiones), debes ejecutar los comandos de `npm` **dentro** del contenedor.
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+# Instalar una nueva validación o dependencia en tu package.json
+docker compose exec frontend npm install <nombre_paquete>
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# Ver los logs en vivo (por si hay algún error de compilación Next.js)
+docker compose logs -f frontend
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# Detener el entorno
+docker compose down
+```
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Hot-Reloading Activo
+Tu código fuente (`src/app/page.tsx`, etc...) está vinculado de manera bidireccional (Bind Mount) dentro del contenedor. Todo código modificado localmente por tu IDE de preferencia causará una recarga instantánea en tu navegador.
