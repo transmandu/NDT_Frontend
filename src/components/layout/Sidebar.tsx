@@ -3,115 +3,126 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard, Wrench, Shield, FlaskConical,
-  ClipboardList, FileText, LogOut, ChevronLeft, ChevronRight
+  Home, FileBarChart, Wrench, ShieldCheck, ClipboardCheck,
+  ChevronDown, ChevronLeft, ChevronRight, User, X
 } from 'lucide-react';
 import { useState } from 'react';
 
-const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/instruments', label: 'Instrumentos', icon: Wrench },
-  { href: '/standards', label: 'Patrones', icon: Shield },
-  { href: '/calibration', label: 'Calibraciones', icon: FlaskConical },
-  { href: '/audit-log', label: 'Auditoría', icon: ClipboardList, role: 'admin' },
-];
-
-export default function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+export default function Sidebar({ isOpen, onToggle }: { isOpen: boolean; onToggle: () => void }) {
+  const [isCalMenuOpen, setIsCalMenuOpen] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
   const { user, clearAuth } = useAuthStore();
 
-  const handleLogout = () => {
-    clearAuth();
-    router.push('/login');
+  const NavItem = ({ href, icon, label, size = 16 }: { href: string; icon: React.ReactNode; label: string; size?: number }) => {
+    const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
+    return (
+      <Link href={href} style={{ textDecoration: 'none' }}>
+        <button className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md transition-colors text-xs ${
+          isActive
+            ? 'bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400 font-medium'
+            : 'text-[var(--text-muted)] hover-bg'
+        }`}>
+          {icon}
+          <span>{label}</span>
+        </button>
+      </Link>
+    );
   };
 
-  const filteredItems = navItems.filter(item => !item.role || item.role === user?.role);
-
-  return (
-    <motion.aside
-      animate={{ width: collapsed ? 72 : 260 }}
-      transition={{ duration: 0.2, ease: 'easeInOut' }}
-      style={{
-        height: '100vh',
-        position: 'fixed',
-        left: 0,
-        top: 0,
-        background: '#0f1420',
-        borderRight: '1px solid var(--color-border)',
-        display: 'flex',
-        flexDirection: 'column',
-        zIndex: 50,
-        overflow: 'hidden',
-      }}
-    >
+  const SidebarContent = () => (
+    <div className="w-60 h-full flex flex-col" style={{ backgroundColor: 'var(--bg-panel)' }}>
       {/* Logo */}
-      <div style={{ padding: collapsed ? '20px 16px' : '20px 24px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ minWidth: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <FlaskConical size={20} color="white" />
+      <div className="p-4 flex items-center justify-between shrink-0 h-14" style={{ borderBottom: '1px solid var(--border-color)' }}>
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-md flex items-center justify-center font-bold text-white shadow-sm text-xs shrink-0" style={{ backgroundColor: '#FFA526' }}>
+            H7
+          </div>
+          <div className="whitespace-nowrap overflow-hidden">
+            <h1 className="font-bold text-xs tracking-tight" style={{ color: '#FF4712' }}>Transmandu</h1>
+            <p className="text-[9px] uppercase tracking-wider font-semibold truncate" style={{ color: 'var(--text-muted)' }}>Lab NDT ISO 17025</p>
+          </div>
         </div>
-        {!collapsed && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>Orinoco Q&C</div>
-            <div style={{ fontSize: '0.65rem', color: '#64748b' }}>LIMS v1.0</div>
-          </motion.div>
-        )}
       </div>
 
       {/* Nav */}
-      <nav style={{ flex: 1, padding: '12px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {filteredItems.map((item) => {
-          const isActive = pathname.startsWith(item.href);
-          return (
-            <Link key={item.href} href={item.href} style={{ textDecoration: 'none' }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: collapsed ? '12px 16px' : '10px 16px',
-                borderRadius: 10,
-                fontSize: '0.875rem',
-                fontWeight: isActive ? 600 : 400,
-                color: isActive ? '#fff' : '#94a3b8',
-                background: isActive ? 'rgba(99,102,241,0.12)' : 'transparent',
-                borderLeft: isActive ? '3px solid #6366f1' : '3px solid transparent',
-                transition: 'all 0.15s ease',
-                cursor: 'pointer',
-              }}>
-                <item.icon size={20} style={{ minWidth: 20, color: isActive ? '#818cf8' : '#64748b' }} />
-                {!collapsed && <span>{item.label}</span>}
-              </div>
-            </Link>
-          );
-        })}
-      </nav>
+      <div className="flex-1 overflow-y-auto py-3">
+        <div className="px-3 space-y-0.5">
+          <NavItem href="/dashboard" icon={<Home size={16} />} label="Dashboard" />
 
-      {/* User + Collapse */}
-      <div style={{ padding: '12px 8px', borderTop: '1px solid var(--color-border)' }}>
-        {!collapsed && user && (
-          <div style={{ padding: '8px 16px', marginBottom: 8 }}>
-            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#e2e8f0' }}>{user.name}</div>
-            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{user.role}</div>
+          <div className="pt-3 pb-1">
+            <button
+              onClick={() => setIsCalMenuOpen(!isCalMenuOpen)}
+              className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider hover-bg rounded-md transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              <span className="flex items-center gap-1.5 whitespace-nowrap">Calibraciones</span>
+              <ChevronDown size={14} className={`transform transition-transform ${isCalMenuOpen ? '' : '-rotate-90'} shrink-0`} />
+            </button>
+
+            <AnimatePresence>
+              {isCalMenuOpen && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="overflow-hidden mt-1 ml-1.5 pl-1.5 space-y-0.5"
+                  style={{ borderLeft: '1px solid var(--border-color)' }}
+                >
+                  <NavItem href="/calibration/new" icon={<FileBarChart size={14} />} label="Nueva Calibración" />
+                  <NavItem href="/instruments" icon={<Wrench size={14} />} label="Instrumentos" />
+                  <NavItem href="/standards" icon={<ShieldCheck size={14} />} label="Patrones" />
+                  <NavItem href="/calibration" icon={<ClipboardCheck size={14} />} label="Revisión y Emisión" />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-        )}
-        <button onClick={handleLogout} style={{
-          display: 'flex', alignItems: 'center', gap: 12, width: '100%',
-          padding: '10px 16px', borderRadius: 10, background: 'transparent', border: 'none',
-          color: '#ef4444', cursor: 'pointer', fontSize: '0.85rem', transition: 'background 0.15s',
-        }}>
-          <LogOut size={18} />
-          {!collapsed && 'Cerrar Sesión'}
-        </button>
-        <button onClick={() => setCollapsed(!collapsed)} style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%',
-          padding: '8px', marginTop: 4, borderRadius: 8, background: 'transparent', border: '1px solid var(--color-border)',
-          color: '#64748b', cursor: 'pointer', transition: 'background 0.15s',
-        }}>
-          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        </button>
+        </div>
+      </div>
+
+      {/* User */}
+      <div className="p-3 shrink-0" style={{ borderTop: '1px solid var(--border-color)' }}>
+        <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover-bg cursor-pointer transition-colors">
+          <User size={24} className="p-1 panel rounded-full shadow-sm shrink-0" style={{ color: 'var(--text-muted)' }} />
+          <div className="whitespace-nowrap overflow-hidden">
+            <p className="text-[11px] font-semibold truncate">{user?.name || 'Usuario'}</p>
+            <p className="text-[9px] truncate" style={{ color: 'var(--text-muted)' }}>{user?.role || 'Rol'}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <motion.aside
+      id="tour-sidebar"
+      initial={false}
+      animate={{ width: isOpen ? 240 : 0 }}
+      transition={{ duration: 0.15, ease: 'easeOut' }}
+      className="hidden md:flex relative inset-y-0 left-0 z-40 flex-col panel shadow-sm overflow-visible shrink-0"
+      style={{
+        borderRightWidth: isOpen ? '1px' : '0px',
+        borderRightStyle: 'solid',
+        borderRightColor: 'var(--border-color)',
+      }}
+    >
+      {/* Toggle button */}
+      <button
+        onClick={onToggle}
+        className={`absolute -right-3 top-4 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300 z-50 border cursor-pointer ${
+          isOpen
+            ? 'bg-[var(--bg-panel)] border-[var(--brand-primary)] text-[var(--brand-primary)] hover:bg-orange-50 shadow-md'
+            : 'bg-[var(--brand-primary)] border-[var(--brand-primary)] text-white neon-glow hover:scale-110'
+        }`}
+      >
+        {isOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+      </button>
+
+      <div className="absolute top-0 right-0 h-full overflow-hidden">
+        <SidebarContent />
       </div>
     </motion.aside>
   );

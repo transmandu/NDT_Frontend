@@ -1,190 +1,117 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
+import { ArrowLeft, BookOpen, ChevronDown, XCircle, ClipboardCheck, Send } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/stores/authStore';
-import { FlaskConical, CheckCircle, XCircle, Send, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const statusConfig: Record<string, { label: string; badge: string; color: string }> = {
-  draft: { label: 'Borrador', badge: 'badge-draft', color: '#94a3b8' },
-  pending_review: { label: 'En Revisión', badge: 'badge-pending', color: '#fbbf24' },
-  approved: { label: 'Aprobada', badge: 'badge-approved', color: '#34d399' },
-  rejected: { label: 'Rechazada', badge: 'badge-rejected', color: '#f87171' },
-};
+const COLORS = { primary: '#FFA526', success: '#10B981', danger: '#FF1E12' };
 
 export default function CalibrationDetailPage() {
   const { id } = useParams();
+  const router = useRouter();
   const { user } = useAuthStore();
   const [session, setSession] = useState<any>(null);
+  const [showTraceability, setShowTraceability] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
 
-  const loadSession = () => {
+  useEffect(() => {
     api.get(`/calibration/sessions/${id}`).then(r => { setSession(r.data); setLoading(false); }).catch(() => setLoading(false));
-  };
+  }, [id]);
 
-  useEffect(() => { loadSession(); }, [id]);
-
-  const handleSubmit = async () => {
-    setActionLoading(true);
-    try {
-      const { data } = await api.post(`/calibration/sessions/${id}/submit`, { raw_payload: session.raw_payload || {} });
-      toast.success('Sesión enviada a revisión');
-      loadSession();
-    } catch (err: any) { toast.error(err.response?.data?.message || 'Error'); }
-    finally { setActionLoading(false); }
-  };
+  const isAuditor = user?.role === 'auditor' || user?.role === 'admin';
+  const isPending = session?.status === 'pending_review';
 
   const handleApprove = async () => {
-    setActionLoading(true);
-    try {
-      await api.post(`/calibration/sessions/${id}/approve`);
-      toast.success('Sesión aprobada');
-      loadSession();
-    } catch (err: any) { toast.error(err.response?.data?.message || 'Error'); }
-    finally { setActionLoading(false); }
+    try { await api.post(`/calibration/sessions/${id}/approve`); toast.success('Sesión aprobada exitosamente'); router.push('/calibration'); } catch { toast.error('Error al aprobar'); }
   };
-
   const handleReject = async () => {
-    if (!rejectReason.trim()) { toast.error('Ingrese un motivo'); return; }
-    setActionLoading(true);
-    try {
-      await api.post(`/calibration/sessions/${id}/reject`, { reason: rejectReason });
-      toast.success('Sesión rechazada');
-      loadSession();
-    } catch (err: any) { toast.error(err.response?.data?.message || 'Error'); }
-    finally { setActionLoading(false); }
+    try { await api.post(`/calibration/sessions/${id}/reject`, { reason: 'Requiere corrección' }); toast.success('Sesión rechazada'); router.push('/calibration'); } catch { toast.error('Error al rechazar'); }
   };
 
-  if (loading) return <div style={{ padding: 40 }}><div className="skeleton" style={{ height: 400, width: '100%' }} /></div>;
-  if (!session) return <div style={{ padding: 40, color: '#64748b' }}>Sesión no encontrada</div>;
-
-  const sc = statusConfig[session.status] || statusConfig.draft;
+  if (loading) return <div className="flex items-center justify-center h-64 text-xs" style={{ color: 'var(--text-muted)' }}>Cargando...</div>;
+  if (!session) return <div className="flex items-center justify-center h-64 text-xs" style={{ color: 'var(--text-muted)' }}>Sesión no encontrada</div>;
 
   return (
-    <div className="animate-fadeIn">
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
-        <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <FlaskConical size={24} color={sc.color} /> Sesión #{session.id}
-          </h1>
-          <p style={{ color: '#64748b', fontSize: '0.85rem', marginTop: 4 }}>
-            {session.procedure_schema?.name || 'Procedimiento'} — {new Date(session.created_at).toLocaleDateString('es')}
-          </p>
-        </div>
-        <span className={`badge ${sc.badge}`} style={{ fontSize: '0.85rem', padding: '6px 16px' }}>{sc.label}</span>
+    <div className="w-full space-y-5 animate-fadeIn max-w-[1400px] mx-auto">
+      <div className="flex items-center justify-between mb-2">
+        <button onClick={() => router.push('/calibration')} className="flex items-center gap-1 text-xs hover:underline transition-colors" style={{ color: 'var(--text-muted)' }}>
+          <ArrowLeft size={14} /> Volver a Bandeja
+        </button>
+        {isAuditor && isPending && (
+          <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest"
+            style={{ border: '1px solid rgba(59,130,246,0.3)' }}>Modo Auditoría</span>
+        )}
       </div>
 
-      {/* Info Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20, marginBottom: 28 }}>
-        <div className="card">
-          <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', marginBottom: 12 }}>INSTRUMENTO</h3>
-          <div style={{ fontSize: '0.95rem', fontWeight: 600 }}>{session.instrument?.name || '—'}</div>
-          <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{session.instrument?.internal_code} — {session.instrument?.brand} {session.instrument?.model}</div>
-          <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 4 }}>Serial: {session.instrument?.serial_number}</div>
-        </div>
+      <div className="panel rounded-md shadow-sm p-5 w-full" style={{ borderTop: '4px solid #3b82f6' }}>
+        <h2 className="text-lg font-bold mb-1">Sesión CS-{id}</h2>
+        <p className="text-xs mb-6" style={{ color: 'var(--text-muted)' }}>
+          Técnico: {session.technician?.name || '—'} | Estado: {session.status} | Fecha: {new Date(session.created_at).toLocaleDateString('es')}
+        </p>
 
-        <div className="card">
-          <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', marginBottom: 12 }}>CONDICIONES AMBIENTALES</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <div><div style={{ fontSize: '0.7rem', color: '#64748b' }}>Temperatura</div><div style={{ fontWeight: 600 }}>{session.ambient_temperature} °C</div></div>
-            <div><div style={{ fontSize: '0.7rem', color: '#64748b' }}>Humedad</div><div style={{ fontWeight: 600 }}>{session.ambient_humidity} %</div></div>
-            <div><div style={{ fontSize: '0.7rem', color: '#64748b' }}>Presión</div><div style={{ fontWeight: 600 }}>{session.ambient_pressure || '—'} hPa</div></div>
+        <div className="rounded-md p-4 mb-6" style={{ backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-color)' }}>
+          <h3 className="text-xs font-semibold mb-3 uppercase tracking-wider">Datos Generales</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div><p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Equipo</p><p className="text-xs font-medium">{session.instrument?.internal_code} ({session.instrument?.name})</p></div>
+            <div><p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Procedimiento</p><p className="text-xs font-medium">{session.procedure_schema?.code || '—'}</p></div>
+            <div><p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Temperatura</p><p className="text-xs font-medium font-mono">{session.ambient_temperature} °C</p></div>
+            <div><p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Humedad</p><p className="text-xs font-medium font-mono">{session.ambient_humidity} %</p></div>
           </div>
         </div>
 
-        <div className="card">
-          <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', marginBottom: 12 }}>PERSONAL</h3>
-          <div><span style={{ fontSize: '0.75rem', color: '#64748b' }}>Técnico: </span><span style={{ fontWeight: 500 }}>{session.technician?.name || '—'}</span></div>
-          {session.auditor && <div style={{ marginTop: 6 }}><span style={{ fontSize: '0.75rem', color: '#64748b' }}>Auditor: </span><span style={{ fontWeight: 500 }}>{session.auditor?.name}</span></div>}
-          {session.approved_at && <div style={{ marginTop: 6 }}><span style={{ fontSize: '0.75rem', color: '#64748b' }}>Aprobada: </span><span style={{ fontWeight: 500 }}>{new Date(session.approved_at).toLocaleString('es')}</span></div>}
-        </div>
-      </div>
+        {session.final_results?.length > 0 && (
+          <>
+            <h3 className="text-xs font-semibold mb-3 uppercase tracking-wider">Resultados</h3>
+            <div className="rounded-md overflow-x-auto mb-6" style={{ border: '1px solid var(--border-color)' }}>
+              <table className="w-full text-xs text-left min-w-[400px]">
+                <thead className="th-theme"><tr><th className="px-3 py-2 text-[11px]">Punto</th><th className="px-3 py-2 text-[11px] text-right">u_c</th><th className="px-3 py-2 text-[11px] text-right">k</th><th className="px-3 py-2 text-[11px] text-right font-bold">U</th></tr></thead>
+                <tbody className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
+                  {session.final_results.map((r: any, i: number) => (
+                    <tr key={i}><td className="px-3 py-2 font-mono">{r.nominal_value}</td><td className="px-3 py-2 text-right font-mono">{r.combined_uncertainty}</td><td className="px-3 py-2 text-right font-mono">{r.k_factor}</td><td className="px-3 py-2 text-right font-mono font-bold" style={{ color: COLORS.primary }}>± {r.expanded_uncertainty}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
 
-      {/* Standards */}
-      {session.standards?.length > 0 && (
-        <div className="card" style={{ marginBottom: 28 }}>
-          <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', marginBottom: 12 }}>PATRONES UTILIZADOS</h3>
-          <table className="data-table">
-            <thead><tr><th>Código</th><th>Nombre</th><th>Certificado</th><th className="numeric">U</th><th className="numeric">k</th></tr></thead>
-            <tbody>
-              {session.standards.map((s: any) => (
-                <tr key={s.id}>
-                  <td style={{ fontWeight: 600, color: '#34d399' }}>{s.internal_code}</td>
-                  <td>{s.name}</td>
-                  <td style={{ color: '#94a3b8', fontSize: '0.8rem' }}>{s.certificate_number}</td>
-                  <td className="numeric" style={{ color: '#fbbf24' }}>{s.uncertainty_u}</td>
-                  <td className="numeric">{s.k_factor}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/* Traceability */}
+        <div className="rounded-md" style={{ border: '1px solid var(--border-color)' }}>
+          <button onClick={() => setShowTraceability(!showTraceability)} className="w-full flex items-center justify-between p-3 text-xs font-semibold hover-bg" style={{ color: 'var(--text-muted)' }}>
+            <span className="flex items-center gap-2"><BookOpen size={14} /> Trazabilidad GUM</span>
+            <motion.div animate={{ rotate: showTraceability ? 180 : 0 }}><ChevronDown size={14} /></motion.div>
+          </button>
+          <AnimatePresence>
+            {showTraceability && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden" style={{ backgroundColor: 'var(--bg-hover)' }}>
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4" style={{ borderTop: '1px solid var(--border-color)' }}>
+                  <FC t="u_A = s / √n" d="Tipo A: Repetibilidad" /><FC t="u_B1 = a / (2×√3)" d="Tipo B: Resolución" />
+                  <FC t="u_B2 = U_pat / k" d="Tipo B: Patrón" /><FC t="U = k × √(Σu²)" d="Expandida (k=2, 95%)" />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-      )}
 
-      {/* Final Results */}
-      {session.final_results?.length > 0 && (
-        <div className="card" style={{ marginBottom: 28 }}>
-          <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', marginBottom: 12 }}>RESULTADOS DE INCERTIDUMBRE</h3>
-          <table className="data-table">
-            <thead><tr><th className="numeric">Nominal</th><th className="numeric">Promedio</th><th className="numeric">Error</th><th className="numeric">u_c</th><th className="numeric">k</th><th className="numeric">U (expandida)</th></tr></thead>
-            <tbody>
-              {session.final_results.map((r: any, i: number) => (
-                <tr key={i}>
-                  <td className="numeric">{r.nominal_value}</td>
-                  <td className="numeric">{r.average_measured}</td>
-                  <td className="numeric" style={{ color: '#f87171' }}>{r.error}</td>
-                  <td className="numeric">{r.combined_uncertainty}</td>
-                  <td className="numeric">{r.k_factor}</td>
-                  <td className="numeric" style={{ color: '#fbbf24', fontWeight: 700, fontSize: '1rem' }}>±{r.expanded_uncertainty}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="card">
-        <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', marginBottom: 16 }}>ACCIONES</h3>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          {session.status === 'draft' && (user?.role === 'technician' || user?.role === 'supervisor') && (
-            <button className="btn btn-primary" onClick={handleSubmit} disabled={actionLoading}>
-              {actionLoading ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={16} />} Enviar a Revisión
+        {isAuditor && isPending && (
+          <div className="mt-8 pt-4 flex justify-end gap-3" style={{ borderTop: '1px solid var(--border-color)' }}>
+            <button onClick={handleReject} className="h-9 px-5 rounded-md text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 flex items-center gap-1.5" style={{ border: '1px solid rgba(239,68,68,0.3)' }}>
+              <XCircle size={14} /> Rechazar
             </button>
-          )}
-
-          {session.status === 'pending_review' && user?.role === 'auditor' && (
-            <>
-              <button className="btn btn-success" onClick={handleApprove} disabled={actionLoading}>
-                <CheckCircle size={16} /> Aprobar
-              </button>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input className="input" placeholder="Motivo de rechazo..." value={rejectReason} onChange={e => setRejectReason(e.target.value)} style={{ width: 300 }} />
-                <button className="btn btn-danger" onClick={handleReject} disabled={actionLoading}>
-                  <XCircle size={16} /> Rechazar
-                </button>
-              </div>
-            </>
-          )}
-
-          {session.status === 'approved' && session.certificate_code && (
-            <div style={{ padding: '12px 20px', background: 'rgba(16,185,129,0.1)', borderRadius: 12, border: '1px solid rgba(16,185,129,0.2)' }}>
-              <span style={{ color: '#34d399', fontWeight: 600 }}>✓ Certificado: {session.certificate_code}</span>
-            </div>
-          )}
-
-          {session.status === 'approved' && !session.certificate_code && (
-            <div style={{ padding: '12px 20px', background: 'rgba(16,185,129,0.1)', borderRadius: 12 }}>
-              <span style={{ color: '#34d399', fontWeight: 600 }}>✓ Sesión aprobada</span>
-            </div>
-          )}
-        </div>
+            <button onClick={handleApprove} className="h-9 px-5 rounded-md text-xs font-semibold text-white shadow-md active:scale-95 flex items-center gap-1.5" style={{ backgroundColor: COLORS.success }}>
+              <ClipboardCheck size={14} /> Aprobar y Emitir
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
+}
+
+function FC({ t, d }: { t: string; d: string }) {
+  return (<div className="space-y-1"><p className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>{d}</p><div className="p-2 rounded text-center" style={{ backgroundColor: 'var(--bg-app)', border: '1px solid var(--border-color)' }}><p className="font-mono text-xs">{t}</p></div></div>);
 }
