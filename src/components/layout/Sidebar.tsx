@@ -17,7 +17,16 @@ export default function Sidebar({ isOpen, onToggle }: { isOpen: boolean; onToggl
   const { user, clearAuth } = useAuthStore();
 
   const NavItem = ({ href, icon, label, size = 16 }: { href: string; icon: React.ReactNode; label: string; size?: number }) => {
-    const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
+    let isActive = pathname === href;
+    // Highlight parent routes (e.g. /instruments/123) but explicitly exclude /calibration/new from highlighting the /calibration list.
+    if (!isActive && href !== '/dashboard' && pathname.startsWith(href)) {
+      if (href === '/calibration' && pathname.startsWith('/calibration/new')) {
+        isActive = false;
+      } else {
+        isActive = true;
+      }
+    }
+
     return (
       <Link href={href} style={{ textDecoration: 'none' }}>
         <button className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md transition-colors text-xs ${

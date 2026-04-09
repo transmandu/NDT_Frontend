@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { Search, Plus, MoreHorizontal } from 'lucide-react';
 import type { Standard } from '@/types/calibration';
@@ -8,13 +9,12 @@ import type { Standard } from '@/types/calibration';
 const COLORS = { success: '#10B981', warning: '#FFB812', danger: '#FF1E12' };
 
 export default function StandardsPage() {
-  const [standards, setStandards] = useState<Standard[]>([]);
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    api.get('/standards').then(r => { setStandards(r.data.data || []); setLoading(false); }).catch(() => setLoading(false));
-  }, []);
+  const { data: standards = [], isLoading: loading } = useQuery<Standard[]>({
+    queryKey: ['standards'],
+    queryFn: () => api.get('/standards').then(r => r.data.data || []),
+  });
 
   const filtered = standards.filter(s =>
     s.name.toLowerCase().includes(search.toLowerCase()) || s.internal_code.toLowerCase().includes(search.toLowerCase())

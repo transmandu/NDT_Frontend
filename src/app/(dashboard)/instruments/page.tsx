@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { Search, Plus, MoreHorizontal } from 'lucide-react';
 import type { Instrument } from '@/types/calibration';
@@ -8,13 +9,12 @@ import type { Instrument } from '@/types/calibration';
 const COLORS = { success: '#10B981', primary: '#FFA526' };
 
 export default function InstrumentsPage() {
-  const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    api.get('/instruments').then(r => { setInstruments(r.data.data || []); setLoading(false); }).catch(() => setLoading(false));
-  }, []);
+  const { data: instruments = [], isLoading: loading } = useQuery<Instrument[]>({
+    queryKey: ['instruments'],
+    queryFn: () => api.get('/instruments').then(r => r.data.data || []),
+  });
 
   const filtered = instruments.filter(i =>
     i.name.toLowerCase().includes(search.toLowerCase()) || i.internal_code.toLowerCase().includes(search.toLowerCase())

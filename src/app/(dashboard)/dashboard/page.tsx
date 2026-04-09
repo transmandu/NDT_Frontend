@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -9,20 +9,17 @@ import { Clock, AlertTriangle, CheckCircle2, MoreHorizontal } from 'lucide-react
 const COLORS = { primary: '#FFA526', danger: '#FF1E12', warning: '#FFB812', success: '#10B981' };
 
 export default function DashboardPage() {
-  const [sessions, setSessions] = useState<any[]>([]);
-  const [stats, setStats] = useState({ pending: 0, expiring: 0, total: 0 });
+  const { data: sessions = [] } = useQuery<any[]>({
+    queryKey: ['calibrationSessions'],
+    queryFn: () => api.get('/calibration/sessions').then(r => r.data.data || []),
+  });
 
-  useEffect(() => {
-    api.get('/calibration/sessions').then(r => {
-      const data = r.data.data || [];
-      setSessions(data.slice(0, 5));
-      setStats({
-        pending: data.filter((s: any) => s.status === 'pending_review').length,
-        expiring: 1,
-        total: data.filter((s: any) => s.status === 'approved').length,
-      });
-    }).catch(() => {});
-  }, []);
+  const recentSessions = sessions.slice(0, 5);
+  const stats = {
+    pending:  sessions.filter((s: any) => s.status === 'pending_review').length,
+    expiring: 1,
+    total:    sessions.filter((s: any) => s.status === 'approved').length,
+  };
 
   return (
     <div className="space-y-4 w-full animate-fadeIn">
@@ -54,14 +51,14 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {sessions.length === 0 ? (
-                <>
-                  <ActivityRow id="CS-1043" inst="Pie de Rey Mitutoyo" date="24 Mar 2026" status="En Revisión" color={COLORS.primary} />
-                  <ActivityRow id="CS-1042" inst="Manómetro Wika" date="20 Mar 2026" status="Borrador" color={COLORS.warning} />
-                  <ActivityRow id="CS-1040" inst="Balanza Ohaus" date="18 Mar 2026" status="Aprobado" color={COLORS.success} />
-                </>
+              {recentSessions.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                    No hay sesiones de calibración registradas.
+                  </td>
+                </tr>
               ) : (
-                sessions.map((s: any) => (
+                recentSessions.map((s: any) => (
                   <ActivityRow
                     key={s.id}
                     id={`CS-${s.id}`}

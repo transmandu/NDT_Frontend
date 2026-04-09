@@ -1,73 +1,90 @@
 @import "tailwindcss";
 
-:root {
-  --brand-primary: #FFA526;
-  --brand-accent: #FF4712;
-  --brand-accent2: #FF7013;
-  --brand-danger: #FF1E12;
-  --brand-warning: #FFB812;
-  --brand-light-orange: #FFA366;
-  --brand-success: #10B981;
+/* ── Brand tokens (always available) ── */
+@theme {
+  --color-brand-primary: #FFA526;
+  --color-brand-accent: #FF4712;
+  --color-brand-accent2: #FF7013;
+  --color-brand-danger: #FF1E12;
+  --color-brand-warning: #FFB812;
+  --color-brand-light-orange: #FFA366;
+  --color-brand-success: #10B981;
 }
 
-body.theme-light, .theme-light {
-  --bg-app: #f8fafc;
-  --bg-panel: #ffffff;
-  --bg-hover: #f1f5f9;
-  --bg-active: #e2e8f0;
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --border-color: #e2e8f0;
-  --input-bg: #ffffff;
-  --table-header: #f8fafc;
-  --text-highlight: #c2410c;
-  --text-result-val: #9a3412;
-  --bg-result-row: rgba(255, 237, 213, 0.4);
+/* ── All custom styles MUST live inside @layer base so Tailwind
+     utilities (@layer utilities) can properly override them.
+     Without this, unlayered CSS beats layered utilities in the cascade. ── */
+@layer base {
+  :root {
+    --brand-primary: #FFA526;
+    --brand-accent: #FF4712;
+    --brand-accent2: #FF7013;
+    --brand-danger: #FF1E12;
+    --brand-warning: #FFB812;
+    --brand-light-orange: #FFA366;
+    --brand-success: #10B981;
+  }
+
+  body.theme-light, .theme-light {
+    --bg-app: #f8fafc;
+    --bg-panel: #ffffff;
+    --bg-hover: #f1f5f9;
+    --bg-active: #e2e8f0;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --border-color: #e2e8f0;
+    --input-bg: #ffffff;
+    --table-header: #f8fafc;
+    --text-highlight: #c2410c;
+    --text-result-val: #9a3412;
+    --bg-result-row: rgba(255, 237, 213, 0.4);
+  }
+
+  body.theme-dark, .theme-dark {
+    --bg-app: #040b16;
+    --bg-panel: #0b1426;
+    --bg-hover: #172540;
+    --bg-active: #1e2e4f;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --border-color: #1e293b;
+    --input-bg: #040b16;
+    --table-header: #0d192e;
+    --text-highlight: #facc15;
+    --text-result-val: #facc15;
+    --bg-result-row: rgba(255, 255, 255, 0.05);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; font-family: 'Inter', system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+  body { background-color: var(--bg-app); color: var(--text-main); transition: background-color 0.15s ease, color 0.15s ease; }
+
+  /* ── Custom theme utility classes ── */
+  .app-container { background-color: var(--bg-app); color: var(--text-main); }
+  .panel { background-color: var(--bg-panel); border: 1px solid var(--border-color); }
+  .text-muted-theme { color: var(--text-muted); }
+  .border-theme { border-color: var(--border-color); }
+  .hover-bg:hover { background-color: var(--bg-hover); }
+  .input-theme { background-color: var(--input-bg); color: var(--text-main); border: 1px solid var(--border-color); }
+  .input-theme:focus { outline: none; border-color: var(--brand-primary); box-shadow: 0 0 0 1px var(--brand-primary); }
+  .th-theme { background-color: var(--table-header); color: var(--text-muted); font-weight: 500; text-transform: capitalize; }
+  .td-theme { border-top: 1px solid var(--border-color); }
+
+  .neon-glow { box-shadow: 0 0 12px var(--brand-primary); }
+  .neon-glow:hover { box-shadow: 0 0 18px var(--brand-primary); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  /* Focus ring */
+  *:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 2px; }
+
+  /* Animations */
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
+  .animate-fadeIn { animation: fadeIn 0.2s ease-out; }
+  .animate-slideIn { animation: slideIn 0.15s ease-out; }
 }
-
-body.theme-dark, .theme-dark {
-  --bg-app: #040b16;
-  --bg-panel: #0b1426;
-  --bg-hover: #172540;
-  --bg-active: #1e2e4f;
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --border-color: #1e293b;
-  --input-bg: #040b16;
-  --table-header: #0d192e;
-  --text-highlight: #facc15;
-  --text-result-val: #facc15;
-  --bg-result-row: rgba(255, 255, 255, 0.05);
-}
-
-* { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { height: 100%; font-family: 'Inter', system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
-body { background-color: var(--bg-app); color: var(--text-main); transition: background-color 0.15s ease, color 0.15s ease; }
-
-.app-container { background-color: var(--bg-app); color: var(--text-main); }
-.panel { background-color: var(--bg-panel); border: 1px solid var(--border-color); }
-.text-muted-theme { color: var(--text-muted); }
-.border-theme { border-color: var(--border-color); }
-.hover-bg:hover { background-color: var(--bg-hover); }
-.input-theme { background-color: var(--input-bg); color: var(--text-main); border: 1px solid var(--border-color); }
-.input-theme:focus { outline: none; border-color: var(--brand-primary); box-shadow: 0 0 0 1px var(--brand-primary); }
-.th-theme { background-color: var(--table-header); color: var(--text-muted); font-weight: 500; text-transform: capitalize; }
-.td-theme { border-top: 1px solid var(--border-color); }
-
-.neon-glow { box-shadow: 0 0 12px var(--brand-primary); }
-.neon-glow:hover { box-shadow: 0 0 18px var(--brand-primary); }
-
-/* Scrollbar */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
-
-/* Focus */
-*:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 2px; }
-
-/* Animations */
-@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes slideIn { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
-.animate-fadeIn { animation: fadeIn 0.2s ease-out; }
-.animate-slideIn { animation: slideIn 0.15s ease-out; }
