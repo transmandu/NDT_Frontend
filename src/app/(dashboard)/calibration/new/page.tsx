@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 const COLORS = { primary: '#FFA526', success: '#10B981' };
 
 // Strategies that are fully implemented in the backend
-const IMPLEMENTED_STRATEGIES = ['ME-005', 'ME-003', 'EL-001', 'M-LAB-01', 'ISO-6789'];
+const IMPLEMENTED_STRATEGIES = ['ME-005', 'ME-003', 'EL-001', 'M-LAB-01', 'ISO-6789', 'DIM-001'];
 
 export default function NewCalibrationPage() {
   const router = useRouter();
@@ -150,18 +150,25 @@ export default function NewCalibrationPage() {
           return result;
         });
       } else if (grid.type === 'multi_point_matrix') {
-        // Backend expects array of { nominal_value, readings: [{ reading }] }
+        // Backend expects array of point objects.
+        // number_array cols → strategy-specific arrays:
+        //   • Vernier  (DIM-001): flat float array  [50.01, 50.02, ...]
+        //   • Others (ISO-6789, M-LAB-01, etc.): array of { reading: v }
+        const isVernier = procedureCode === 'DIM-001';
+
         payload[grid.id] = rows.map(rIdx => {
           const row = gridData[rIdx];
           const result: Record<string, any> = {};
 
           for (const col of grid.columns) {
-            if (col.key === 'nominal_value') {
-              result.nominal_value = parseFloat(row[col.key] || '0');
+            if (col.key === 'nominal_value' || col.key === 'nominal_length_mm') {
+              result[col.key] = parseFloat(row[col.key] || '0');
+            } else if (col.key === 'standard_length_mm') {
+              result.standard_length_mm = parseFloat(row[col.key] || row['nominal_length_mm'] || '0');
             } else if (col.type === 'number_array' && row[col.key]) {
-              // Parse comma-separated values into array of objects
-              const vals = row[col.key].split(',').map((v: string) => parseFloat(v.trim())).filter((n: number) => !isNaN(n));
-              result[col.key] = vals.map((v: number) => ({ reading: v }));
+              const vals = String(row[col.key]).split(',').map((v: string) => parseFloat(v.trim())).filter((n: number) => !isNaN(n));
+              // Vernier: plain float array. Others: array of {reading: v}
+              result[col.key] = isVernier ? vals : vals.map((v: number) => ({ reading: v }));
             } else if (col.editable && col.type === 'number' && row[col.key]) {
               result[col.key] = parseFloat(row[col.key]) || 0;
             }
@@ -533,8 +540,13 @@ export default function NewCalibrationPage() {
                 Cálculos ejecutados por el motor metrológico del backend (Strategy {procedureCode}). Sesión congelada e inmutable.
               </p>
 
-              {/* Unified matrix table — sources × points */}
-              <UnifiedResultsTable points={budgetResult.points || []} unit={selectedInst?.unit} />
+              {/* Unified matrix table — auto-detects instrument type */}
+              <UnifiedResultsTable
+                points={budgetResult.points || []}
+                functions={budgetResult.functions}
+                unit={selectedInst?.unit}
+                procedureCode={procedureCode}
+              />
 
               {/* Traceability accordion */}
               <TraceabilityAccordion />
@@ -574,10 +586,50 @@ function InfoChip({ label, value }: { label: string; value: string }) {
 }
 
 /* ─── Unified Results Table ─────────────────────────────── */
-/* Layout:                                                     */
-/*   TOP  → Uncertainty Budget (sources + u_c + k), 1 value   */
-/*   BTM  → Per-point results (Error + U) in compact rows     */
-function UnifiedResultsTable({ points, unit }: { points: any[]; unit?: string }) {
+/* Handles two backend response shapes:                        */
+/*   Standard  → { points: [...] }         (Balanza, Manóm., etc.) */
+/*   Vernier   → { functions: { exterior, interior, depth } } */
+function UnifiedResultsTable({
+  points,
+  functions,
+  unit,
+  procedureCode,
+}: {
+  points: any[];
+  functions?: Record<string, any[]>;
+  unit?: string;
+  procedureCode?: string;
+}) {
+  // ── Vernier: flatten multi-function results ──
+  const isVernier = procedureCode === 'DIM-001' || !!functions;
+
+  if (isVernier && functions) {
+    const funcLabels: Record<string, string> = {
+      exterior: 'Bocas Exteriores',
+      interior: 'Bocas Interiores',
+      depth:    'Sonda de Profundidad',
+    };
+
+    return (
+      <div className="flex flex-col gap-8">
+        {Object.entries(functions).map(([funcKey, funcPoints]) => {
+          if (!funcPoints || funcPoints.length === 0) return null;
+          return (
+            <div key={funcKey}>
+              <p className="text-[11px] font-bold uppercase tracking-widest mb-2"
+                style={{ color: 'var(--text-muted)' }}>
+                📐 {funcLabels[funcKey] ?? funcKey}
+              </p>
+              {/* Reuse standard table for each function's points with µm unit */}
+              <VernierFunctionTable points={funcPoints} />
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // ── Standard instruments ──
   if (!points.length) return null;
 
   const first = points[0];
@@ -720,65 +772,304 @@ function UnifiedResultsTable({ points, unit }: { points: any[]; unit?: string })
               </tr>
             </thead>
             <tbody>
-              {/* ROW: Error (E) — always shown, always varies per point */}
-              <tr className="td-theme" style={{ borderBottom: (!ucConstant || !kConstant || varPerPoint) ? bd : undefined }}>
-                <td className="px-3 py-2.5 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>Error (E)</td>
-                {points.map((pt: any, i: number) => (
-                  <td key={i} className="px-3 py-2.5 text-center font-mono"
-                    style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
-                    {typeof pt.error === 'number' ? pt.error.toFixed(4) : '0.0000'}
-                    <span className="text-[9px] opacity-50 ml-0.5">{unit}</span>
-                  </td>
-                ))}
-              </tr>
 
-              {/* ROW: u_c — only if it varies per point */}
-              {!ucConstant && (
-                <tr className="td-theme" style={{ borderBottom: bd }}>
-                  <td className="px-3 py-2.5 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>u_c (Combinada)</td>
-                  {points.map((pt: any, i: number) => (
-                    <td key={i} className="px-3 py-2.5 text-center font-mono"
-                      style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
-                      {pt.combined_uncertainty?.toFixed(6) ?? '—'}
-                      <span className="text-[9px] opacity-50 ml-0.5">{unit}</span>
-                    </td>
-                  ))}
-                </tr>
-              )}
+              {/* ── Auto-detect instrument type from data shape ── */}
+              {(() => {
+                // Manometer-specific: has error_ascending / error_descending / hysteresis
+                const hasDescending   = points.some((p: any) => p.error_descending != null);
+                const hasHysteresis   = points.some((p: any) => typeof p.hysteresis === 'number' && p.hysteresis > 0);
+                const errorLabel      = hasDescending ? 'Error ↑ (Asc.)' : 'Error (E)';
+                const hasVarU         = varPerPoint;
 
-              {/* ROW: k — only if it varies */}
-              {!kConstant && (
-                <tr className="td-theme" style={{ borderBottom: bd }}>
-                  <td className="px-3 py-2.5 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>k (Factor)</td>
-                  {points.map((pt: any, i: number) => (
-                    <td key={i} className="px-3 py-2.5 text-center font-mono"
-                      style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
-                      {pt.k_factor?.toFixed(2) ?? '—'}
-                    </td>
-                  ))}
-                </tr>
-              )}
+                return (
+                  <>
+                    {/* ROW: Error — "↑" label when descending also exists */}
+                    <tr className="td-theme" style={{ borderBottom: bd }}>
+                      <td className="px-3 py-2.5 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>
+                        {errorLabel}
+                      </td>
+                      {points.map((pt: any, i: number) => (
+                        <td key={i} className="px-3 py-2.5 text-center font-mono"
+                          style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
+                          {typeof pt.error === 'number' ? pt.error.toFixed(4) : '0.0000'}
+                          <span className="text-[9px] opacity-50 ml-0.5">{unit}</span>
+                        </td>
+                      ))}
+                    </tr>
 
-              {/* ROW: U expanded — only if it varies */}
-              {varPerPoint && (
-                <tr style={{ backgroundColor: 'rgba(255,165,38,0.06)', borderTop: `2px solid ${COLORS.primary}` }}>
-                  <td className="px-3 py-2.5 font-bold" style={{ borderRight: `1px solid ${COLORS.primary}40`, color: COLORS.primary }}>
-                    U (Expandida)
-                  </td>
-                  {points.map((pt: any, i: number) => (
-                    <td key={i} className="px-3 py-2.5 text-center font-mono font-bold"
-                      style={{ borderLeft: i > 0 ? `1px solid ${COLORS.primary}40` : undefined, color: COLORS.primary }}>
-                      ± {pt.expanded_uncertainty?.toFixed(4) ?? '—'}
-                      <span className="text-[10px] font-normal opacity-60 ml-0.5">{unit}</span>
-                    </td>
-                  ))}
-                </tr>
-              )}
+                    {/* ROW: Error descendente — manómetros únicamente */}
+                    {hasDescending && (
+                      <tr className="td-theme" style={{ borderBottom: bd }}>
+                        <td className="px-3 py-2.5 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>
+                          Error ↓ (Desc.)
+                        </td>
+                        {points.map((pt: any, i: number) => (
+                          <td key={i} className="px-3 py-2.5 text-center font-mono"
+                            style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
+                            {pt.error_descending != null ? Number(pt.error_descending).toFixed(4) : '—'}
+                            <span className="text-[9px] opacity-50 ml-0.5">{unit}</span>
+                          </td>
+                        ))}
+                      </tr>
+                    )}
+
+                    {/* ROW: Histéresis — manómetros únicamente, resaltada en ámbar suave */}
+                    {hasHysteresis && (
+                      <tr style={{ backgroundColor: 'rgba(251,191,36,0.05)', borderBottom: bd }}>
+                        <td className="px-3 py-2.5 font-semibold" style={{ borderRight: bd, color: '#D97706' }}>
+                          Histéresis (h)
+                        </td>
+                        {points.map((pt: any, i: number) => (
+                          <td key={i} className="px-3 py-2.5 text-center font-mono font-semibold"
+                            style={{ borderLeft: i > 0 ? bd : undefined, color: '#D97706' }}>
+                            {typeof pt.hysteresis === 'number' ? pt.hysteresis.toFixed(4) : '—'}
+                            <span className="text-[9px] font-normal opacity-60 ml-0.5">{unit}</span>
+                          </td>
+                        ))}
+                      </tr>
+                    )}
+
+                    {/* ROW: u_c — only if it varies per point */}
+                    {!ucConstant && (
+                      <tr className="td-theme" style={{ borderBottom: bd }}>
+                        <td className="px-3 py-2.5 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>u_c (Combinada)</td>
+                        {points.map((pt: any, i: number) => (
+                          <td key={i} className="px-3 py-2.5 text-center font-mono"
+                            style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
+                            {pt.combined_uncertainty?.toFixed(6) ?? '—'}
+                            <span className="text-[9px] opacity-50 ml-0.5">{unit}</span>
+                          </td>
+                        ))}
+                      </tr>
+                    )}
+
+                    {/* ROW: k — only if it varies */}
+                    {!kConstant && (
+                      <tr className="td-theme" style={{ borderBottom: bd }}>
+                        <td className="px-3 py-2.5 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>k (Factor)</td>
+                        {points.map((pt: any, i: number) => (
+                          <td key={i} className="px-3 py-2.5 text-center font-mono"
+                            style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
+                            {pt.k_factor?.toFixed(2) ?? '—'}
+                          </td>
+                        ))}
+                      </tr>
+                    )}
+
+                    {/* ROW: U expanded — only if it varies (e.g. when hysteresis differs per point) */}
+                    {hasVarU && (
+                      <tr style={{ backgroundColor: 'rgba(255,165,38,0.06)', borderTop: `2px solid ${COLORS.primary}` }}>
+                        <td className="px-3 py-2.5 font-bold" style={{ borderRight: `1px solid ${COLORS.primary}40`, color: COLORS.primary }}>
+                          U (Expandida)
+                        </td>
+                        {points.map((pt: any, i: number) => (
+                          <td key={i} className="px-3 py-2.5 text-center font-mono font-bold"
+                            style={{ borderLeft: i > 0 ? `1px solid ${COLORS.primary}40` : undefined, color: COLORS.primary }}>
+                            ± {pt.expanded_uncertainty?.toFixed(4) ?? '—'}
+                            <span className="text-[10px] font-normal opacity-60 ml-0.5">{unit}</span>
+                          </td>
+                        ))}
+                      </tr>
+                    )}
+                  </>
+                );
+              })()}
+
             </tbody>
           </table>
         </div>
       </div>
 
+    </div>
+  );
+}
+
+
+/* ─── VernierFunctionTable ───────────────────────────────── */
+/* Renders results for a single Vernier function (ext/int/depth). */
+/* The backend returns values in µm internally; we show both µm and mm. */
+function VernierFunctionTable({ points }: { points: any[] }) {
+  if (!points || points.length === 0) return null;
+
+  const first = points[0];
+  const sources: any[] = first?.uncertainty_sources || [];
+
+  const bd       = '1px solid var(--border-color)';
+  const bdStrong = '2px solid var(--border-color)';
+  const thMuted  = { color: 'var(--text-muted)', borderColor: 'var(--border-color)' };
+
+  const typeBadge = (type: string) => (
+    <span className="inline-block px-1.5 py-0.5 rounded text-[8px] font-bold uppercase"
+      style={{
+        backgroundColor: type === 'A' ? 'rgba(16,185,129,0.12)' : 'rgba(99,102,241,0.12)',
+        color:           type === 'A' ? '#10B981' : '#818CF8',
+        border:          `1px solid ${type === 'A' ? '#10B98130' : '#818CF830'}`,
+      }}>{type}</span>
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+
+      {/* ══ TABLE 1: BUDGET — sources from first point (same structure for all) ══ */}
+      <div>
+        <p className="text-[10px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>
+          Presupuesto de Incertidumbre (GUM) — Fuentes
+        </p>
+        <div className="rounded-md overflow-hidden" style={{ border: bd }}>
+          <table className="w-full text-xs text-left">
+            <thead>
+              <tr style={{ backgroundColor: 'var(--bg-app)', borderBottom: bdStrong }}>
+                <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold" style={{ ...thMuted, width: 260, borderRight: bd }}>Fuente</th>
+                <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-center" style={{ ...thMuted, width: 44, borderRight: bd }}>Tipo</th>
+                <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold" style={{ ...thMuted, borderRight: bd }}>Distribución</th>
+                <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-right" style={{ ...thMuted, borderRight: bd }}>u(xi) [µm]</th>
+                <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-right" style={thMuted}>ν (g.l.)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sources.map((src: any, i: number) => (
+                <tr key={i} className="td-theme hover-bg transition-colors" style={{ borderBottom: bd }}>
+                  <td className="px-3 py-2 font-medium" style={{ borderRight: bd, color: 'var(--text-main)' }}>
+                    <span className="block">{src.source_name}</span>
+                    {src.note && (
+                      <span className="block text-[9px] mt-0.5 opacity-50 font-normal font-mono truncate max-w-[240px]" title={src.note}>
+                        {src.note}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-center" style={{ borderRight: bd }}>{typeBadge(src.type)}</td>
+                  <td className="px-3 py-2 text-[11px]" style={{ borderRight: bd, color: 'var(--text-muted)' }}>{src.distribution}</td>
+                  <td className="px-3 py-2 text-right font-mono font-semibold" style={{ borderRight: bd, color: 'var(--text-main)' }}>
+                    {typeof src.standard_uncertainty === 'number' ? src.standard_uncertainty.toFixed(4) : '—'}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text-muted)' }}>
+                    {src.degrees_of_freedom ?? '∞'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ══ TABLE 2: PER-POINT RESULTS — transposed (points as columns) ══ */}
+      <div>
+        <p className="text-[10px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>
+          Resultados por Punto Nominal
+        </p>
+        <div className="rounded-md overflow-hidden" style={{ border: bd }}>
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ backgroundColor: 'var(--bg-app)', borderBottom: bdStrong }}>
+                <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-left"
+                  style={{ ...thMuted, borderRight: bd, width: 160 }}>Métrica</th>
+                {points.map((pt: any, i: number) => (
+                  <th key={i} className="px-3 py-2 text-[10px] font-bold text-center"
+                    style={{
+                      borderLeft: i > 0 ? bd : undefined,
+                      color: COLORS.primary,
+                      backgroundColor: 'rgba(255,165,38,0.06)',
+                    }}>
+                    {pt.nominal_value} <span className="text-[9px] font-normal opacity-60">mm</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {/* Long. patrón (mm) */}
+              <tr className="td-theme" style={{ borderBottom: bd }}>
+                <td className="px-3 py-2 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>Patrón l_p (mm)</td>
+                {points.map((pt: any, i: number) => (
+                  <td key={i} className="px-3 py-2 text-center font-mono" style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
+                    {pt.standard_length_mm?.toFixed(4) ?? '—'}
+                  </td>
+                ))}
+              </tr>
+
+              {/* Media l̄_j (mm) */}
+              <tr className="td-theme" style={{ borderBottom: bd }}>
+                <td className="px-3 py-2 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>Media l̄_j (mm)</td>
+                {points.map((pt: any, i: number) => (
+                  <td key={i} className="px-3 py-2 text-center font-mono" style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
+                    {pt.mean_mm?.toFixed(4) ?? '—'}
+                  </td>
+                ))}
+              </tr>
+
+              {/* Desviación D_j (µm) */}
+              <tr className="td-theme" style={{ borderBottom: bd }}>
+                <td className="px-3 py-2 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>Desv. D_j (µm)</td>
+                {points.map((pt: any, i: number) => (
+                  <td key={i} className="px-3 py-2 text-center font-mono font-semibold"
+                    style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
+                    {typeof pt.deviation_um === 'number'
+                      ? (pt.deviation_um >= 0 ? '+' : '') + pt.deviation_um.toFixed(2)
+                      : '—'}
+                    <span className="text-[9px] opacity-50 ml-0.5">µm</span>
+                  </td>
+                ))}
+              </tr>
+
+              {/* s_j (µm) */}
+              <tr className="td-theme" style={{ borderBottom: bd }}>
+                <td className="px-3 py-2 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>Desv. típica s_j (µm)</td>
+                {points.map((pt: any, i: number) => (
+                  <td key={i} className="px-3 py-2 text-center font-mono" style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-muted)' }}>
+                    {pt.std_deviation_um?.toFixed(2) ?? '—'}<span className="text-[9px] opacity-50 ml-0.5">µm</span>
+                  </td>
+                ))}
+              </tr>
+
+              {/* n lecturas */}
+              <tr className="td-theme" style={{ borderBottom: bd }}>
+                <td className="px-3 py-2 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>n (lecturas)</td>
+                {points.map((pt: any, i: number) => (
+                  <td key={i} className="px-3 py-2 text-center font-mono" style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-muted)' }}>
+                    {pt.n_readings ?? '—'}
+                  </td>
+                ))}
+              </tr>
+
+              {/* u_c */}
+              <tr className="td-theme" style={{ borderBottom: bd }}>
+                <td className="px-3 py-2 font-semibold italic" style={{ borderRight: bd, color: 'var(--text-muted)' }}>u_c (µm)</td>
+                {points.map((pt: any, i: number) => (
+                  <td key={i} className="px-3 py-2 text-center font-mono" style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
+                    {pt.combined_uncertainty_um?.toFixed(3) ?? '—'}
+                  </td>
+                ))}
+              </tr>
+
+              {/* k (ν_eff) */}
+              <tr className="td-theme" style={{ borderBottom: bd }}>
+                <td className="px-3 py-2 font-semibold italic" style={{ borderRight: bd, color: 'var(--text-muted)' }}>k (Welch-S.)</td>
+                {points.map((pt: any, i: number) => (
+                  <td key={i} className="px-3 py-2 text-center font-mono" style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
+                    {pt.k_factor?.toFixed(2) ?? '—'}
+                  </td>
+                ))}
+              </tr>
+
+              {/* U expanded — highlighted row */}
+              <tr style={{ backgroundColor: 'rgba(255,165,38,0.06)', borderTop: `2px solid ${COLORS.primary}` }}>
+                <td className="px-3 py-2.5 font-bold" style={{ borderRight: `1px solid ${COLORS.primary}40`, color: COLORS.primary }}>
+                  U (µm) / U (mm)
+                </td>
+                {points.map((pt: any, i: number) => (
+                  <td key={i} className="px-3 py-2.5 text-center font-mono font-bold"
+                    style={{ borderLeft: i > 0 ? `1px solid ${COLORS.primary}40` : undefined, color: COLORS.primary }}>
+                    ± {pt.expanded_uncertainty_um?.toFixed(2) ?? '—'} µm
+                    <span className="block text-[9px] font-normal opacity-70 mt-0.5">
+                      = {pt.expanded_uncertainty_mm?.toFixed(4) ?? '—'} mm
+                    </span>
+                  </td>
+                ))}
+              </tr>
+
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
