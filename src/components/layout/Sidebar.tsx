@@ -1,24 +1,23 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Home, FileBarChart, Wrench, ShieldCheck, ClipboardCheck,
-  ChevronDown, ChevronLeft, ChevronRight, User, X
+  ChevronDown, ChevronLeft, ChevronRight, User
 } from 'lucide-react';
 import { useState } from 'react';
 
 export default function Sidebar({ isOpen, onToggle }: { isOpen: boolean; onToggle: () => void }) {
   const [isCalMenuOpen, setIsCalMenuOpen] = useState(true);
   const pathname = usePathname();
-  const router = useRouter();
-  const { user, clearAuth } = useAuthStore();
+  const { user } = useAuthStore();
 
-  const NavItem = ({ href, icon, label, size = 16 }: { href: string; icon: React.ReactNode; label: string; size?: number }) => {
+  const NavItem = ({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) => {
     let isActive = pathname === href;
-    // Highlight parent routes (e.g. /instruments/123) but explicitly exclude /calibration/new from highlighting the /calibration list.
     if (!isActive && href !== '/dashboard' && pathname.startsWith(href)) {
       if (href === '/calibration' && pathname.startsWith('/calibration/new')) {
         isActive = false;
@@ -43,20 +42,34 @@ export default function Sidebar({ isOpen, onToggle }: { isOpen: boolean; onToggl
 
   const SidebarContent = () => (
     <div className="w-60 h-full flex flex-col" style={{ backgroundColor: 'var(--bg-panel)' }}>
-      {/* Logo */}
-      <div className="p-4 flex items-center justify-between shrink-0 h-14" style={{ borderBottom: '1px solid var(--border-color)' }}>
+
+      {/* ── Logo ── */}
+      <div className="px-4 flex items-center justify-between shrink-0 h-16" style={{ borderBottom: '1px solid var(--border-color)' }}>
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-md flex items-center justify-center font-bold text-white shadow-sm text-xs shrink-0" style={{ backgroundColor: '#FFA526' }}>
-            H7
+          {/* Logo real del laboratorio */}
+          <div className="shrink-0 w-12 h-12 relative rounded-full overflow-hidden border border-gray-200 dark:border-gray-800 bg-white">
+            <Image
+              src="/logo.jpg"
+              alt="Orinoco Quality & Control"
+              fill
+              sizes="256px"
+              quality={100}
+              className="object-contain scale-[1.25]"
+              priority
+            />
           </div>
           <div className="whitespace-nowrap overflow-hidden">
-            <h1 className="font-bold text-xs tracking-tight" style={{ color: '#FF4712' }}>Transmandu</h1>
-            <p className="text-[9px] uppercase tracking-wider font-semibold truncate" style={{ color: 'var(--text-muted)' }}>Lab NDT ISO 17025</p>
+            <h1 className="font-bold text-[11px] tracking-tight leading-tight" style={{ color: 'var(--text-main)' }}>
+              Orinoco Q&amp;C
+            </h1>
+            <p className="text-[9px] uppercase tracking-wider font-semibold truncate" style={{ color: 'var(--text-muted)' }}>
+              Lab NDT · ISO 17025
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Nav */}
+      {/* ── Nav ── */}
       <div className="flex-1 overflow-y-auto py-3">
         <div className="px-3 space-y-0.5">
           <NavItem href="/dashboard" icon={<Home size={16} />} label="Dashboard" />
@@ -81,10 +94,10 @@ export default function Sidebar({ isOpen, onToggle }: { isOpen: boolean; onToggl
                   className="overflow-hidden mt-1 ml-1.5 pl-1.5 space-y-0.5"
                   style={{ borderLeft: '1px solid var(--border-color)' }}
                 >
-                  <NavItem href="/calibration/new" icon={<FileBarChart size={14} />} label="Nueva Calibración" />
-                  <NavItem href="/instruments" icon={<Wrench size={14} />} label="Instrumentos" />
-                  <NavItem href="/standards" icon={<ShieldCheck size={14} />} label="Patrones" />
-                  <NavItem href="/calibration" icon={<ClipboardCheck size={14} />} label="Revisión y Emisión" />
+                  <NavItem href="/calibration/new"  icon={<FileBarChart size={14} />}  label="Nueva Calibración" />
+                  <NavItem href="/instruments"      icon={<Wrench size={14} />}        label="Instrumentos" />
+                  <NavItem href="/standards"        icon={<ShieldCheck size={14} />}   label="Patrones" />
+                  <NavItem href="/calibration"      icon={<ClipboardCheck size={14} />} label="Revisión y Emisión" />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -92,7 +105,7 @@ export default function Sidebar({ isOpen, onToggle }: { isOpen: boolean; onToggl
         </div>
       </div>
 
-      {/* User */}
+      {/* ── Usuario ── */}
       <div className="p-3 shrink-0" style={{ borderTop: '1px solid var(--border-color)' }}>
         <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover-bg cursor-pointer transition-colors">
           <User size={24} className="p-1 panel rounded-full shadow-sm shrink-0" style={{ color: 'var(--text-muted)' }} />

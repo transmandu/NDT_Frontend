@@ -489,13 +489,13 @@ function StandardGrid({ grid, data, onChange, validationErrors }: {
 
   return (
     <div className="rounded-md overflow-x-auto w-full" style={{ border: '1px solid var(--border-color)' }}>
-      <table className="w-full text-left text-xs" style={{ minWidth: `${Math.max(columns.length * 150, 500)}px` }}>
+      <table className="w-full text-left text-xs" style={{ minWidth: `${Math.max(columns.length * 90, 500)}px` }}>
         <thead>
           <tr>
             <th className="px-2 py-2 th-theme text-center w-9 text-[10px]"
               style={{ borderBottom: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)' }}>#</th>
             {columns.map(col => (
-              <th key={col.key} className="px-3 py-2 th-theme text-[10px] uppercase tracking-wider font-medium"
+              <th key={col.key} className="px-1.5 py-2 th-theme text-[9px] uppercase tracking-wider font-semibold leading-tight"
                 style={{ borderBottom: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)' }}>
                 <div className="flex flex-col gap-0.5">
                   <span className="flex items-center gap-1">
@@ -585,7 +585,7 @@ function StandardGrid({ grid, data, onChange, validationErrors }: {
                     }
 
                     return (
-                      <td key={col.key} className="px-2 py-1"
+                      <td key={col.key} className="px-1 py-1"
                         style={{ borderRight: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)' }}>
                         <input type="text" inputMode={col.type === 'number' ? 'decimal' : 'text'}
                           value={rowData[col.key] || ''}

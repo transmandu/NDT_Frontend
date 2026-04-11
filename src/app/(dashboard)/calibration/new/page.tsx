@@ -20,12 +20,12 @@ export default function NewCalibrationPage() {
   const router = useRouter();
 
   // ─── Data from API (via Tanstack Query) ───
-  const { data: instruments = [], isLoading: loadingInstruments } = useQuery({
+  const { data: instruments = [], isLoading: loadingInstruments } = useQuery<Instrument[]>({
     queryKey: ['instruments'],
     queryFn: () => api.get('/instruments').then(res => res.data.data || [])
   });
 
-  const { data: standards = [], isLoading: loadingStandards } = useQuery({
+  const { data: standards = [], isLoading: loadingStandards } = useQuery<Standard[]>({
     queryKey: ['standards'],
     queryFn: () => api.get('/standards').then(res => res.data.data || [])
   });
@@ -62,9 +62,9 @@ export default function NewCalibrationPage() {
   }, [selectedInstrument]);
 
   // Derived selections needed for queries
-  const selectedInst = instruments.find(i => String(i.id) === selectedInstrument);
-  const baseSchemaCode = selectedInst && schemas.length > 0 
-    ? schemas.find((s: any) => s.category?.toLowerCase() === selectedInst.category?.toLowerCase())?.code
+  const selectedInst = instruments.find((i: Instrument) => String(i.id) === selectedInstrument);
+  const baseSchemaCode = selectedInst && schemas.length > 0
+    ? schemas.find((s: { category?: string; code?: string }) => s.category?.toLowerCase() === selectedInst.category?.toLowerCase())?.code
     : null;
 
   // ─── Load full schema when instrument changes (Cached via Tanstack Query) ───
@@ -75,20 +75,20 @@ export default function NewCalibrationPage() {
   });
 
   // ─── Derived ───
-  const selectedStd = standards.find(s => String(s.id) === selectedStandard);
+  const selectedStd = standards.find((s: Standard) => String(s.id) === selectedStandard);
   const grids: GridSchema[] = matchedSchema?.ui_schema?.grids || [];
   const procedureCode = matchedSchema?.code || '';
   const isStrategyImplemented = IMPLEMENTED_STRATEGIES.includes(procedureCode);
 
   // Filter standards by selected instrument's category
-  const filteredStandards = selectedInst
-    ? standards.filter(s => s.category?.toLowerCase() === selectedInst.category?.toLowerCase())
+  const filteredStandards: Standard[] = selectedInst
+    ? standards.filter((s: Standard) => s.category?.toLowerCase() === selectedInst.category?.toLowerCase())
     : standards;
 
   // Reset standard when instrument changes and it no longer matches
   useEffect(() => {
     if (selectedStandard && filteredStandards.length > 0) {
-      const stillValid = filteredStandards.some(s => String(s.id) === selectedStandard);
+      const stillValid = filteredStandards.some((s: Standard) => String(s.id) === selectedStandard);
       if (!stillValid) setSelectedStandard('');
     }
     // Auto-select if only one standard matches

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { Eye, Download, ArrowLeft, XCircle, ClipboardCheck, BookOpen, ChevronDown, Send } from 'lucide-react';
@@ -18,16 +19,16 @@ const statusColors: Record<string, string> = {
 export default function CalibrationPage() {
   const [activeTab, setActiveTab] = useState<'pending' | 'issued'>('pending');
   const [reviewingId, setReviewingId] = useState<number | null>(null);
-  const [sessions, setSessions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  useEffect(() => {
-    api.get('/calibration/sessions').then(r => { setSessions(r.data.data || []); setLoading(false); }).catch(() => setLoading(false));
-  }, []);
+  const { data: sessions = [], isLoading } = useQuery<any[]>({
+    queryKey: ['calibrationSessions'],
+    queryFn: () => api.get('/calibration/sessions').then(r => r.data.data || []),
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  });
 
-  const pending = sessions.filter(s => s.status === 'pending_review' || s.status === 'draft');
-  const issued = sessions.filter(s => s.status === 'approved');
+  const pending = sessions.filter((s: any) => s.status === 'pending_review' || s.status === 'draft');
+  const issued = sessions.filter((s: any) => s.status === 'approved');
 
   if (reviewingId) {
     return <CalibrationReview id={reviewingId} onBack={() => setReviewingId(null)} />;
@@ -62,7 +63,15 @@ export default function CalibrationPage() {
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
-              {pending.length === 0 ? (
+              {isLoading ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <tr key={`skel-p-${i}`} className="td-theme border-b border-[var(--border-color)]">
+                    <td colSpan={5} className="px-4 py-3.5">
+                      <div className="h-4 rounded animate-pulse w-full" style={{ backgroundColor: 'var(--bg-hover)' }} />
+                    </td>
+                  </tr>
+                ))
+              ) : pending.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-8 text-center text-[11px]" style={{ color: 'var(--text-muted)' }}>No hay sesiones pendientes</td></tr>
               ) : (
                 pending.map(s => (
@@ -97,7 +106,15 @@ export default function CalibrationPage() {
               </tr>
             </thead>
             <tbody>
-              {issued.length === 0 ? (
+              {isLoading ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <tr key={`skel-i-${i}`} className="td-theme border-b border-[var(--border-color)]">
+                    <td colSpan={5} className="px-4 py-3.5">
+                      <div className="h-4 rounded animate-pulse w-full" style={{ backgroundColor: 'var(--bg-hover)' }} />
+                    </td>
+                  </tr>
+                ))
+              ) : issued.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-8 text-center text-[11px]" style={{ color: 'var(--text-muted)' }}>No hay certificados emitidos</td></tr>
               ) : (
                 issued.map(s => (
