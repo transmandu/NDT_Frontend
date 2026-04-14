@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
-import { Eye, Download, ArrowLeft, XCircle, ClipboardCheck, BookOpen, ChevronDown, Send } from 'lucide-react';
+import { Eye, Download, ArrowLeft, XCircle, ClipboardCheck, BookOpen, ChevronDown, Send, Minimize2, Maximize2, Sigma } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import AuditMathBreakdown from '@/components/calibration/AuditMathBreakdown';
 
 const COLORS = { primary: '#FFA526', success: '#10B981', warning: '#FFB812', danger: '#FF1E12' };
 
@@ -20,6 +21,15 @@ export default function CalibrationPage() {
   const [activeTab, setActiveTab] = useState<'pending' | 'issued'>('pending');
   const [reviewingId, setReviewingId] = useState<number | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const reviewId = searchParams.get('review');
+    if (reviewId) {
+      setReviewingId(Number(reviewId));
+      router.replace('/calibration', undefined); // Limpia la URL para evitar recargas raras
+    }
+  }, [searchParams, router]);
 
   const { data: sessions = [], isLoading } = useQuery<any[]>({
     queryKey: ['calibrationSessions'],
@@ -143,11 +153,44 @@ export default function CalibrationPage() {
 /* --- AUDIT REVIEW SUBVIEW --- */
 function CalibrationReview({ id, onBack }: { id: number; onBack: () => void }) {
   const [session, setSession] = useState<any>(null);
-  const [showTraceability, setShowTraceability] = useState(true);
+  const [showProcedure, setShowProcedure] = useState(false);
 
   useEffect(() => {
     api.get(`/calibration/sessions/${id}`).then(r => setSession(r.data)).catch(() => {});
   }, [id]);
+
+  // Flatten all results from calculated_results (recalculated) or final_results (legacy)
+  const allResults: any[] = (() => {
+    if (!session) return [];
+
+    // Prefer calculated_results (recalculated from raw_payload by the backend)
+    const source = session.calculated_results || session.final_results;
+    if (!source) return [];
+
+    // Vernier-style: results grouped by functions (e.g. { functions: { exterior: [...], interior: [...] } })
+    if (source.functions) {
+      const flat: any[] = [];
+      for (const [funcKey, points] of Object.entries(source.functions)) {
+        for (const pt of points as any[]) {
+          flat.push({ ...pt, function: funcKey });
+        }
+      }
+      return flat;
+    }
+    // Balanza-style: results.points array
+    if (source.points) {
+      return source.points;
+    }
+    // Direct array
+    if (Array.isArray(source)) {
+      return source;
+    }
+    return [];
+  })();
+
+  const hasDetailedSources = allResults.some(
+    (r: any) => r.uncertainty_sources && r.uncertainty_sources.length > 0
+  );
 
   return (
     <div className="w-full space-y-5 animate-fadeIn max-w-[1400px] mx-auto">
@@ -178,60 +221,117 @@ function CalibrationReview({ id, onBack }: { id: number; onBack: () => void }) {
           </div>
         </div>
 
-        {/* Results summary */}
-        {session?.final_results?.length > 0 && (
-          <>
-            <h3 className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{ color: 'var(--text-main)' }}>2. Resultados de Incertidumbre</h3>
-            <div className="rounded-md overflow-x-auto mb-6" style={{ border: '1px solid var(--border-color)' }}>
-              <table className="w-full text-xs text-left min-w-[400px]">
-                <thead className="th-theme">
-                  <tr>
-                    <th className="px-3 py-2 text-[11px]">Punto Nominal</th>
-                    <th className="px-3 py-2 text-[11px] text-right">u_c</th>
-                    <th className="px-3 py-2 text-[11px] text-right">k</th>
-                    <th className="px-3 py-2 text-[11px] text-right font-bold">U (expandida)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
-                  {session.final_results.map((r: any, i: number) => (
-                    <tr key={i}>
-                      <td className="px-3 py-2 font-mono">{r.nominal_value}</td>
-                      <td className="px-3 py-2 text-right font-mono">{r.combined_uncertainty}</td>
-                      <td className="px-3 py-2 text-right font-mono">{r.k_factor}</td>
-                      <td className="px-3 py-2 text-right font-mono font-bold" style={{ color: COLORS.primary }}>± {r.expanded_uncertainty}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
+        {/* ── Results Summary (visible when procedure is collapsed) ── */}
+        <AnimatePresence mode="wait">
+          {!showProcedure && allResults.length > 0 && (
+            <motion.div
+              key="results-top"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20, transition: { duration: 0.2 } }}
+              transition={{ duration: 0.35 }}
+            >
+              <h3 className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{ color: 'var(--text-main)' }}>2. Resultados de Incertidumbre</h3>
+              <ResultsTable results={allResults} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Toggle Procedure Button ── */}
+        {hasDetailedSources && (
+          <motion.div layout className="my-5">
+            <button
+              onClick={() => setShowProcedure(!showProcedure)}
+              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-md text-[12px] font-semibold transition-all duration-300 group"
+              style={{
+                border: showProcedure
+                  ? '1px solid rgba(255,165,38,0.4)'
+                  : '1px dashed rgba(255,165,38,0.4)',
+                backgroundColor: showProcedure
+                  ? 'rgba(255,165,38,0.06)'
+                  : 'transparent',
+                color: COLORS.primary,
+              }}
+            >
+              {showProcedure ? (
+                <>
+                  <Minimize2 size={15} />
+                  Minimizar Procedimiento
+                  <motion.div animate={{ rotate: 180 }} transition={{ duration: 0.2 }}>
+                    <ChevronDown size={14} />
+                  </motion.div>
+                </>
+              ) : (
+                <>
+                  <Sigma size={15} />
+                  Ver Procedimiento Completo de Cálculo
+                  <motion.div animate={{ rotate: 0 }} transition={{ duration: 0.2 }}>
+                    <ChevronDown size={14} />
+                  </motion.div>
+                </>
+              )}
+            </button>
+          </motion.div>
         )}
 
-        {/* Traceability */}
-        <div className="rounded-md" style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-panel)' }}>
-          <button onClick={() => setShowTraceability(!showTraceability)}
-            className="w-full flex items-center justify-between p-3 text-xs font-semibold hover-bg transition-colors"
-            style={{ color: 'var(--text-muted)' }}>
-            <span className="flex items-center gap-2"><BookOpen size={14} /> Trazabilidad y Fórmulas GUM</span>
-            <motion.div animate={{ rotate: showTraceability ? 180 : 0 }} transition={{ duration: 0.2 }}><ChevronDown size={14} /></motion.div>
-          </button>
-          <AnimatePresence>
-            {showTraceability && (
-              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25 }} className="overflow-hidden" style={{ backgroundColor: 'var(--bg-hover)' }}>
-                <div className="p-4" style={{ borderTop: '1px solid var(--border-color)' }}>
-                  <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Cálculos documentados de acuerdo al <strong>JCGM 100:2008 (ISO GUM)</strong>.</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FormulaCard title="1. Incertidumbre Tipo A" formula="u_A = s / √n" desc="s = desviación estándar, n = número de lecturas." />
-                    <FormulaCard title="2. Incertidumbre Tipo B (Resolución)" formula="u_B1 = a / (2 × √3)" desc="Distribución rectangular. a = resolución mínima." />
-                    <FormulaCard title="3. Incertidumbre Tipo B (Patrón)" formula="u_B2 = U_patrón / k" desc="Distribución normal con factor k del certificado." />
-                    <FormulaCard title="4. Incertidumbre Expandida" formula="u_c = √(u_A² + u_B1² + u_B2²) | U = k × u_c" desc="Raíz suma de cuadrados × factor k=2 (95% confianza)." />
-                  </div>
+        {/* ── Full Procedure (expandable) ── */}
+        <AnimatePresence>
+          {showProcedure && (
+            <motion.div
+              key="procedure"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="overflow-hidden"
+            >
+              <div
+                className="rounded-md p-5 mb-5"
+                style={{
+                  backgroundColor: 'var(--bg-hover)',
+                  border: '1px solid var(--border-color)',
+                  borderTop: `3px solid ${COLORS.primary}`,
+                }}
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <BookOpen size={16} style={{ color: COLORS.primary }} />
+                  <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-main)' }}>
+                    Procedimiento de Cálculo — JCGM 100:2008 (ISO GUM)
+                  </h3>
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+                <p className="text-[10px] mb-5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                  A continuación se documenta el procedimiento completo de cálculo de incertidumbre,
+                  paso a paso, con los valores reales obtenidos durante la calibración. Cada punto de
+                  calibración muestra las ecuaciones aplicadas según la &ldquo;Guide to the Expression of
+                  Uncertainty in Measurement&rdquo; (GUM).
+                </p>
+
+                <AuditMathBreakdown
+                  results={allResults}
+                  instrumentUnit={session?.instrument?.unit}
+                />
+              </div>
+
+              {/* ── Results at bottom (after procedure is shown) ── */}
+              {allResults.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3, duration: 0.4 }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-px flex-1" style={{ backgroundColor: 'var(--border-color)' }} />
+                    <span className="text-[9px] uppercase tracking-widest font-semibold" style={{ color: 'var(--text-muted)' }}>
+                      Resumen Final de Resultados
+                    </span>
+                    <div className="h-px flex-1" style={{ backgroundColor: 'var(--border-color)' }} />
+                  </div>
+                  <ResultsTable results={allResults} highlight />
+                </motion.div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Auditor Actions */}
         <div className="mt-8 pt-4 flex justify-end gap-3" style={{ borderTop: '1px solid var(--border-color)' }}>
@@ -249,14 +349,61 @@ function CalibrationReview({ id, onBack }: { id: number; onBack: () => void }) {
   );
 }
 
-function FormulaCard({ title, formula, desc }: { title: string; formula: string; desc: string }) {
+/* ── Reusable Results Table ─────────────────────────────────── */
+function ResultsTable({ results, highlight }: { results: any[]; highlight?: boolean }) {
   return (
-    <div className="space-y-2">
-      <h5 className="text-[11px] font-bold" style={{ color: 'var(--text-main)' }}>{title}</h5>
-      <div className="p-2 rounded text-center" style={{ backgroundColor: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
-        <p className="font-mono text-xs" style={{ color: 'var(--text-main)' }}>{formula}</p>
-      </div>
-      <p className="text-[10px] leading-tight" style={{ color: 'var(--text-muted)' }}>{desc}</p>
+    <div
+      className="rounded-md overflow-x-auto mb-4"
+      style={{
+        border: highlight ? '2px solid rgba(255,165,38,0.3)' : '1px solid var(--border-color)',
+        boxShadow: highlight ? '0 0 20px rgba(255,165,38,0.06)' : 'none',
+      }}
+    >
+      <table className="w-full text-xs text-left min-w-[500px]">
+        <thead className="th-theme">
+          <tr>
+            <th className="px-3 py-2 text-[11px]">Punto Nominal</th>
+            {results.some(r => r.function) && <th className="px-3 py-2 text-[11px]">Función</th>}
+            {results.some(r => r.error !== undefined) && <th className="px-3 py-2 text-[11px] text-right">Error</th>}
+            <th className="px-3 py-2 text-[11px] text-right">u_c</th>
+            <th className="px-3 py-2 text-[11px] text-right">k</th>
+            <th className="px-3 py-2 text-[11px] text-right font-bold">U (expandida)</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
+          {results.map((r: any, i: number) => {
+            const funcMap: Record<string, string> = {
+              exterior: 'Exterior', interior: 'Interior', depth: 'Profundidad',
+            };
+            return (
+              <motion.tr
+                key={i}
+                initial={highlight ? { backgroundColor: 'rgba(255,165,38,0.1)' } : {}}
+                animate={{ backgroundColor: 'transparent' }}
+                transition={{ delay: i * 0.08, duration: 0.8 }}
+              >
+                <td className="px-3 py-2 font-mono">{r.nominal_value}</td>
+                {results.some(r => r.function) && (
+                  <td className="px-3 py-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    {funcMap[r.function] || r.function || '—'}
+                  </td>
+                )}
+                {results.some(r => r.error !== undefined) && (
+                  <td className="px-3 py-2 text-right font-mono">{r.error !== undefined ? r.error : '—'}</td>
+                )}
+                <td className="px-3 py-2 text-right font-mono">
+                  {r.combined_uncertainty_mm ?? r.combined_uncertainty ?? '—'}
+                </td>
+                <td className="px-3 py-2 text-right font-mono">{r.k_factor}</td>
+                <td className="px-3 py-2 text-right font-mono font-bold" style={{ color: COLORS.primary }}>
+                  ± {r.expanded_uncertainty_mm ?? r.expanded_uncertainty ?? '—'}
+                </td>
+              </motion.tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
+

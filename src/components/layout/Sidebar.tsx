@@ -63,7 +63,7 @@ export default function Sidebar({ isOpen, onToggle }: { isOpen: boolean; onToggl
               Orinoco Q&amp;C
             </h1>
             <p className="text-[9px] uppercase tracking-wider font-semibold truncate" style={{ color: 'var(--text-muted)' }}>
-              Lab NDT · ISO 17025
+              LAB NDT - TRANSMANDU, C.A.
             </p>
           </div>
         </div>

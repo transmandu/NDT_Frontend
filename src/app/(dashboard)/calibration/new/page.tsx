@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calculator, Send, Save, Loader2, Info, BookOpen, ChevronDown, AlertTriangle } from 'lucide-react';
@@ -38,7 +38,8 @@ export default function NewCalibrationPage() {
   const loading = loadingInstruments || loadingStandards || loadingSchemas;
 
   // ─── Selections ───
-  const [selectedInstrument, setSelectedInstrument] = useState('');
+  const searchParams = useSearchParams();
+  const [selectedInstrument, setSelectedInstrument] = useState(searchParams.get('instrument_id') || '');
   const [selectedStandard, setSelectedStandard] = useState('');
 
   // ─── Environmental / Metadata ───

@@ -84,7 +84,7 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
   }, []);
 
   const handleLogout = () => { clearAuth(); router.push('/login'); };
-  const goToSession  = (id: number) => { setIsOpen(false); router.push(`/calibration/${id}`); };
+  const goToSession  = (id: number) => { setIsOpen(false); router.push(`/calibration?review=${id}`); };
 
   const unread = data?.unread_count ?? 0;
 
