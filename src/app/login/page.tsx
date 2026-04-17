@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
 import { motion } from 'framer-motion';
+import { C } from '@/lib/colors';
 import { Eye, EyeOff, ShieldCheck } from 'lucide-react';
 
 export default function LoginPage() {
@@ -90,7 +91,7 @@ export default function LoginPage() {
             <motion.button type="submit" disabled={loading}
               whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
               className="w-full h-9 rounded text-xs font-semibold text-white shadow-md transition-all disabled:opacity-50"
-              style={{ backgroundColor: '#FFA526' }}>
+              style={{ backgroundColor: C.accent }}>
               {loading ? 'Verificando...' : 'Ingresar al Sistema'}
             </motion.button>
           </form>

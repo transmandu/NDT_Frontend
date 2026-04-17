@@ -106,7 +106,7 @@ export function DataTable<TData, TValue>({
           {activeFilters.map(f => (
             <span key={f.id}
               className="hidden sm:flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-medium whitespace-nowrap"
-              style={{ backgroundColor: '#FFA52620', color: '#FFA526', border: '1px solid #FFA52640' }}>
+              style={{ backgroundColor: 'color-mix(in srgb, var(--brand-primary) 15%, transparent)', color: 'var(--brand-primary)', border: '1px solid color-mix(in srgb, var(--brand-primary) 30%, transparent)' }}>
               {f.id}: {String(f.value)}
               <button onClick={() => table.getColumn(f.id)?.setFilterValue(undefined)} className="ml-0.5 opacity-70 hover:opacity-100">
                 <X size={9} />
@@ -135,7 +135,7 @@ export function DataTable<TData, TValue>({
                 <p className="px-3 py-1.5 text-[9px] uppercase font-semibold" style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-color)' }}>Visibilidad</p>
                 {table.getAllColumns().filter(c => c.getCanHide()).map(col => (
                   <label key={col.id} className="flex items-center gap-2 px-3 py-1.5 text-[11px] cursor-pointer hover-bg" style={{ color: 'var(--text-main)' }}>
-                    <input type="checkbox" checked={col.getIsVisible()} onChange={col.getToggleVisibilityHandler()} className="accent-orange-500 h-3 w-3" />
+                    <input type="checkbox" checked={col.getIsVisible()} onChange={col.getToggleVisibilityHandler()} className="accent-[var(--brand-primary)] h-3 w-3" />
                     <span className="capitalize">{col.id.replace(/_/g, ' ')}</span>
                   </label>
                 ))}
@@ -254,7 +254,7 @@ function FilterPopover({ column }: { column: any }) {
         onClick={() => setOpen(v => !v)}
         title={`Filtrar por ${column.id}`}
         className="p-0.5 rounded transition-colors hover:opacity-80"
-        style={{ color: isActive ? '#FFA526' : 'var(--text-muted)' }}
+        style={{ color: isActive ? 'var(--brand-primary)' : 'var(--text-muted)' }}
       >
         <ListFilter size={11} className={isActive ? 'opacity-100' : 'opacity-60'} />
       </button>
@@ -272,7 +272,7 @@ function FilterPopover({ column }: { column: any }) {
               <button
                 onClick={() => { column.setFilterValue(undefined); setOpen(false); }}
                 className="text-[9px] flex items-center gap-0.5 hover:opacity-80"
-                style={{ color: '#FFA526' }}
+                style={{ color: 'var(--brand-primary)' }}
               >
                 <X size={8} /> Limpiar
               </button>
@@ -283,10 +283,10 @@ function FilterPopover({ column }: { column: any }) {
           <button
             onClick={() => { column.setFilterValue(undefined); setOpen(false); }}
             className="w-full px-3 py-1.5 text-left text-[11px] hover-bg transition-colors flex items-center justify-between"
-            style={{ color: !isActive ? '#FFA526' : 'var(--text-main)', fontWeight: !isActive ? 600 : 400 }}
+            style={{ color: !isActive ? 'var(--brand-primary)' : 'var(--text-main)', fontWeight: !isActive ? 600 : 400 }}
           >
             Todos
-            {!isActive && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#FFA526' }} />}
+            {!isActive && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--brand-primary)' }} />}
           </button>
 
           {options.map(opt => (
@@ -294,10 +294,10 @@ function FilterPopover({ column }: { column: any }) {
               key={opt}
               onClick={() => { column.setFilterValue(opt === currentValue ? undefined : opt); setOpen(false); }}
               className="w-full px-3 py-1.5 text-left text-[11px] hover-bg transition-colors capitalize flex items-center justify-between"
-              style={{ color: currentValue === opt ? '#FFA526' : 'var(--text-main)', fontWeight: currentValue === opt ? 600 : 400 }}
+              style={{ color: currentValue === opt ? 'var(--brand-primary)' : 'var(--text-main)', fontWeight: currentValue === opt ? 600 : 400 }}
             >
               {opt}
-              {currentValue === opt && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#FFA526' }} />}
+              {currentValue === opt && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--brand-primary)' }} />}
             </button>
           ))}
         </div>

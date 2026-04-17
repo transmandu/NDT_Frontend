@@ -2,7 +2,7 @@
 
 /* ── Brand tokens (always available) ── */
 @theme {
-  --color-brand-primary: #FFA526;
+  --color-brand-primary: #6366F1;
   --color-brand-accent: #FF4712;
   --color-brand-accent2: #FF7013;
   --color-brand-danger: #FF1E12;
@@ -16,7 +16,7 @@
      Without this, unlayered CSS beats layered utilities in the cascade. ── */
 @layer base {
   :root {
-    --brand-primary: #FFA526;
+    --brand-primary: #6366F1;
     --brand-accent: #FF4712;
     --brand-accent2: #FF7013;
     --brand-danger: #FF1E12;

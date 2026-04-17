@@ -2,16 +2,19 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import api from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calculator, Send, Save, Loader2, Info, BookOpen, ChevronDown, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Instrument, Standard, GridSchema } from '@/types/calibration';
 import DynamicGrid, { type GridData } from '@/components/calibration/DynamicGrid';
+import { isSameCategory } from '@/lib/categoryUtils';
 
 import { useQuery } from '@tanstack/react-query';
 
-const COLORS = { primary: '#FFA526', success: '#10B981' };
+import { C } from '@/lib/colors';
+const COLORS = { primary: C.primary, success: C.success };
 
 // Strategies that are fully implemented in the backend
 const IMPLEMENTED_STRATEGIES = ['ME-005', 'ME-003', 'EL-001', 'M-LAB-01', 'ISO-6789', 'DIM-001'];
@@ -83,18 +86,25 @@ export default function NewCalibrationPage() {
 
   // Filter standards by selected instrument's category
   const filteredStandards: Standard[] = selectedInst
-    ? standards.filter((s: Standard) => s.category?.toLowerCase() === selectedInst.category?.toLowerCase())
+    ? standards.filter((s: Standard) => isSameCategory(s.category, selectedInst.category))
     : standards;
 
-  // Reset standard when instrument changes and it no longer matches
+  // Auto-preselect factory_standard when instrument changes
   useEffect(() => {
-    if (selectedStandard && filteredStandards.length > 0) {
-      const stillValid = filteredStandards.some((s: Standard) => String(s.id) === selectedStandard);
-      if (!stillValid) setSelectedStandard('');
+    if (!selectedInst) return;
+    if (filteredStandards.length === 0) { setSelectedStandard(''); return; }
+
+    // 1. Try to match factory_standard_id registered on the instrument
+    if ((selectedInst as any).factory_standard_id) {
+      const factoryMatch = filteredStandards.find(s => s.id === (selectedInst as any).factory_standard_id);
+      if (factoryMatch) { setSelectedStandard(String(factoryMatch.id)); return; }
     }
-    // Auto-select if only one standard matches
-    if (filteredStandards.length === 1 && !selectedStandard) {
-      setSelectedStandard(String(filteredStandards[0].id));
+    // 2. Auto-select if only one standard matches the category
+    if (filteredStandards.length === 1) { setSelectedStandard(String(filteredStandards[0].id)); return; }
+    // 3. Clear if currently selected standard no longer matches
+    if (selectedStandard) {
+      const stillValid = filteredStandards.some(s => String(s.id) === selectedStandard);
+      if (!stillValid) setSelectedStandard('');
     }
   }, [selectedInstrument, filteredStandards]);
 
@@ -107,14 +117,12 @@ export default function NewCalibrationPage() {
   const buildPayload = useCallback(() => {
     const payload: Record<string, any> = {};
 
-    // Add instrument resolution and standard info
+    // instrument_resolution is required by all backend strategies.
     if (selectedInst) {
       payload.instrument_resolution = selectedInst.resolution;
     }
-    if (selectedStd) {
-      payload.standard_uncertainty_u = selectedStd.uncertainty_u;
-      payload.standard_k_factor = selectedStd.k_factor;
-    }
+    // NOTE: standard_uncertainty_u and standard_k_factor are read exclusively from
+    // the immutable BD snapshot — they must NOT travel in the payload.
 
     // Add environmental metadata
     payload.metadata = { ...environmentalData };
@@ -373,7 +381,8 @@ export default function NewCalibrationPage() {
             </label>
             <select value={selectedStandard}
               onChange={e => setSelectedStandard(e.target.value)}
-              className="w-full h-9 px-3 rounded input-theme text-xs">
+              disabled={!!selectedInst && filteredStandards.length === 0}
+              className="w-full h-9 px-3 rounded input-theme text-xs disabled:opacity-50 disabled:cursor-not-allowed">
               <option value="">{selectedInst ? `— Patrones de ${selectedInst.category} —` : '— Seleccione Instrumento primero —'}</option>
               {filteredStandards.map(s => (
                 <option key={s.id} value={s.id}>
@@ -381,6 +390,32 @@ export default function NewCalibrationPage() {
                 </option>
               ))}
             </select>
+
+            {/* ── No-standards warning ─────────────────────── */}
+            <AnimatePresence>
+              {selectedInst && filteredStandards.length === 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, height: 0 }}
+                  animate={{ opacity: 1, y: 0, height: 'auto' }}
+                  exit={{ opacity: 0, y: -6, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <div className="flex items-start gap-2 px-3 py-2.5 rounded-md text-[11px] mt-1"
+                    style={{ backgroundColor: '#EF444410', border: '1px solid #EF444435', color: '#EF4444' }}>
+                    <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                    <span>
+                      No hay patrones de referencia registrados para la categoría{' '}
+                      <strong className="font-semibold">"{selectedInst.category}"</strong>.{' '}
+                      Sin un patrón válido no es posible calibrar este equipo.{' '}
+                      <Link href={`/standards?new=${selectedInst.category}`} className="underline font-semibold hover:opacity-80 transition-opacity">
+                        Registrar patrón →
+                      </Link>
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
@@ -515,7 +550,7 @@ export default function NewCalibrationPage() {
                 <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                   onClick={handleSubmit} disabled={submitting || !isStrategyImplemented}
                   className="h-10 px-6 rounded-md text-xs font-semibold text-white shadow-md flex items-center gap-2 transition-colors disabled:opacity-50"
-                  style={{ backgroundColor: isStrategyImplemented ? COLORS.primary : '#6b7280' }}>
+                  style={{ backgroundColor: isStrategyImplemented ? C.accent : '#6b7280' }}>
                   {submitting ? <Loader2 size={14} className="animate-spin" /> : <Calculator size={14} />}
                   Procesar GUM e Enviar a Revisión
                 </motion.button>
@@ -556,7 +591,7 @@ export default function NewCalibrationPage() {
               <div className="mt-6 pt-4 flex justify-end" style={{ borderTop: '1px solid var(--border-color)' }}>
                 <button onClick={() => router.push('/calibration')}
                   className="h-9 px-6 rounded text-[11px] font-medium text-white shadow-sm flex items-center gap-1.5 transition-transform active:scale-95"
-                  style={{ backgroundColor: COLORS.success }}>
+                  style={{ backgroundColor: C.accent }}>
                   <Send size={14} /> Ver en Bandeja de Revisión
                 </button>
               </div>

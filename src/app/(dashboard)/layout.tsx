@@ -10,12 +10,12 @@ import { Toaster } from 'react-hot-toast';
 import { AnimatePresence, motion } from 'framer-motion';
 
 const viewInfo: Record<string, { title: string; subtitle: string; autoSave?: boolean }> = {
-  '/dashboard': { title: 'Dashboard', subtitle: 'Resumen operativo Orinoko Quality & Control' },
-  '/calibration/new': { title: 'Hoja de Calibración', subtitle: 'Registro directo de lecturas y evaluación', autoSave: true },
-  '/instruments': { title: 'Instrumentos', subtitle: 'Inventario de equipos de medición' },
-  '/standards': { title: 'Patrones', subtitle: 'Estándares de trazabilidad metrológica' },
-  '/calibration': { title: 'Centro de Aprobación', subtitle: 'Gestión y emisión de certificados oficiales' },
-  '/audit-log': { title: 'Auditoría', subtitle: 'Registro de trazabilidad ISO 17025' },
+  '/dashboard':        { title: 'Dashboard',   subtitle: 'Resumen operativo Orinoko Quality & Control' },
+  '/calibration/new':  { title: 'Hoja de Calibración', subtitle: 'Registro directo de lecturas y evaluación', autoSave: true },
+  '/instruments':      { title: 'Instrumentos',  subtitle: 'Inventario de equipos de medición' },
+  '/standards':        { title: 'Patrones',       subtitle: 'Estándares de trazabilidad metrológica' },
+  '/calibration':      { title: 'Centro de Aprobación', subtitle: 'Gestión y emisión de certificados oficiales' },
+  '/audit-log':        { title: 'Auditoría',     subtitle: 'Registro de trazabilidad ISO 17025' },
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

@@ -19,7 +19,8 @@ import { DataTable } from '@/components/ui/data-table';
 import type { ColumnDef } from '@tanstack/react-table';
 
 /* ─── Constants ──────────────────────────────────────────── */
-const COLORS = { success: '#10B981', primary: '#FFA526', danger: '#EF4444' };
+import { C } from '@/lib/colors';
+const COLORS = { success: C.success, primary: C.primary, danger: C.danger };
 
 const INSTRUMENT_TYPES = [
   { code: 'DIM-001', label: 'Pie de Rey / Vernier', prefix: 'VER', icon: '📐', category: 'dimensional', unit: 'mm', unitOptions: ['mm', 'cm', 'in'], color: '#6366F1', description: 'Calibración dimensional por comparación con bloques patrón', extras: [{ key: 'functions_exterior', label: 'Bocas Exteriores', type: 'checkbox', hint: 'Habilitar medición exterior' }, { key: 'functions_interior', label: 'Bocas Interiores', type: 'checkbox', hint: 'Habilitar medición interior' }, { key: 'functions_depth', label: 'Sonda de Profundidad', type: 'checkbox', hint: 'Habilitar sonda depth' }] },
@@ -235,7 +236,7 @@ export default function InstrumentsPage() {
             <button
               onClick={() => { setEditTarget(null); setModalOpen(true); }}
               className="h-7 px-3 text-[11px] rounded font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95 hover:opacity-90 whitespace-nowrap"
-              style={{ backgroundColor: COLORS.primary, color: '#fff' }}
+              style={{ backgroundColor: C.accent, color: '#fff' }}
             >
               <Plus size={13} /> Nuevo Instrumento
             </button>
@@ -459,7 +460,7 @@ function InstrumentModal({ instrument, standards, instruments, onClose }: {
 
               <div className="px-6 py-4 flex items-center justify-end gap-3 shrink-0" style={{ borderTop: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}>
                 <button type="button" onClick={onClose} className="h-8 px-4 rounded text-[11px] font-medium transition-colors hover-bg" style={{ color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}>Cancelar</button>
-                <button type="submit" disabled={isSubmitting} className="h-8 px-5 rounded text-[11px] font-semibold text-white flex items-center gap-2 transition-opacity disabled:opacity-60" style={{ backgroundColor: COLORS.primary }}>
+                <button type="submit" disabled={isSubmitting} className="h-8 px-5 rounded text-[11px] font-semibold text-white flex items-center gap-2 transition-opacity disabled:opacity-60" style={{ backgroundColor: C.accent }}>
                   {isSubmitting && <Loader2 size={13} className="animate-spin" />}
                   {isEdit ? 'Guardar Cambios' : 'Crear Instrumento'}
                 </button>

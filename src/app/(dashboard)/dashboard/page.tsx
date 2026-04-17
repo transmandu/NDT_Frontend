@@ -8,7 +8,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, AlertTriangle, CheckCircle2, MoreHorizontal, PieChart as PieChartIcon, Activity, Zap } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
-const COLORS = { primary: '#FFA526', danger: '#FF1E12', warning: '#FFB812', success: '#10B981', draft: '#9CA3AF' };
+import { C } from '@/lib/colors';
+const COLORS = { primary: C.primary, danger: C.danger, warning: C.warning, success: C.success, draft: C.statusDraft };
 
 export default function DashboardPage() {
   const { data: sessions = [] } = useQuery<any[]>({
