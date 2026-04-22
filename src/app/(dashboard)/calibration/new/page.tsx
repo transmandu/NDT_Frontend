@@ -45,8 +45,13 @@ export default function NewCalibrationPage() {
   const [selectedInstrument, setSelectedInstrument] = useState(searchParams.get('instrument_id') || '');
   const [selectedStandard, setSelectedStandard] = useState('');
 
-  // ─── Environmental / Metadata ───
+  // ── Environmental / Metadata ──
   const [environmentalData, setEnvironmentalData] = useState<Record<string, string>>({});
+  // ── Certificate dates (static fields — not driven by schema) ──
+  const [calibrationDate, setCalibrationDate]         = useState(() => new Date().toISOString().split('T')[0]);
+  const [nextCalibrationDate, setNextCalibrationDate] = useState('');
+  const [technicianObservation, setTechnicianObservation] = useState('');
+  const [tempUncertainty, setTempUncertainty]         = useState('1.0'); // ±°C
 
   // ─── Grid data storage: gridId → { rowIdx → { colKey → value } } ───
   const [gridDataMap, setGridDataMap] = useState<Record<string, GridData>>({});
@@ -62,6 +67,9 @@ export default function NewCalibrationPage() {
     setBudgetResult(null);
     setGridDataMap({});
     setEnvironmentalData({});
+    setNextCalibrationDate('');
+    setTempUncertainty('1.0');
+    setCalibrationDate(new Date().toISOString().split('T')[0]);
     setValidationErrors({});
   }, [selectedInstrument]);
 
@@ -206,6 +214,7 @@ export default function NewCalibrationPage() {
   const validateFields = useCallback((): boolean => {
     if (!selectedInstrument) { toast.error('Seleccione un instrumento'); return false; }
     if (!selectedStandard) { toast.error('Seleccione un patrón de referencia'); return false; }
+    if (!nextCalibrationDate) { toast.error('Indique la fecha de próxima calibración'); return false; }
 
     // Validate environmental requirements
     const metaReqs = matchedSchema?.ui_schema?.metadata_requirements || [];
@@ -271,10 +280,13 @@ export default function NewCalibrationPage() {
         procedure_schema_id: matchedSchema.id,
         category: selectedInst?.category || '',
         ambient_temperature: parseFloat(environmentalData.air_temperature || '20'),
+        ambient_temperature_uncertainty: parseFloat(tempUncertainty || '1.0'),
         ambient_humidity: parseFloat(environmentalData.humidity || '50'),
         ambient_pressure: environmentalData.ambient_pressure ? parseFloat(environmentalData.ambient_pressure) : null,
-        observation: null,
+        observation: technicianObservation || null,
         standard_ids: [parseInt(selectedStandard)],
+        calibration_date: calibrationDate || new Date().toISOString().split('T')[0],
+        next_calibration_date: nextCalibrationDate || null,
       });
 
       // Update the session with raw payload
@@ -312,10 +324,13 @@ export default function NewCalibrationPage() {
         procedure_schema_id: matchedSchema.id,
         category: selectedInst?.category || '',
         ambient_temperature: parseFloat(environmentalData.air_temperature || '20'),
+        ambient_temperature_uncertainty: parseFloat(tempUncertainty || '1.0'),
         ambient_humidity: parseFloat(environmentalData.humidity || '50'),
         ambient_pressure: environmentalData.ambient_pressure ? parseFloat(environmentalData.ambient_pressure) : null,
-        observation: null,
+        observation: technicianObservation || null,
         standard_ids: [parseInt(selectedStandard)],
+        calibration_date: calibrationDate || new Date().toISOString().split('T')[0],
+        next_calibration_date: nextCalibrationDate || null,
       });
 
       const sessionId = createRes.data.session_id;
@@ -352,7 +367,7 @@ export default function NewCalibrationPage() {
       {/* ══════════════════════════════════════════════════════ */}
       {/* ═══ PASO 1: SELECCIÓN + CONDICIONES AMBIENTALES ═══  */}
       {/* ══════════════════════════════════════════════════════ */}
-      <div className="panel rounded-md shadow-sm p-5 w-full">
+      <div id="tour-cal-step1" className="panel rounded-md shadow-sm p-5 w-full">
         <h3 className="text-sm font-semibold mb-5 flex items-center gap-2" style={{ color: 'var(--text-main)' }}>
           <StepBadge n={1} />
           Identificación del Ensayo
@@ -360,7 +375,7 @@ export default function NewCalibrationPage() {
 
         {/* Instrument + Standard selectors */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="space-y-1.5">
+          <div id="tour-cal-instrument" className="space-y-1.5">
             <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
               Equipo a Calibrar <span className="text-red-500">*</span>
             </label>
@@ -375,7 +390,7 @@ export default function NewCalibrationPage() {
               ))}
             </select>
           </div>
-          <div className="space-y-1.5">
+          <div id="tour-cal-standard" className="space-y-1.5">
             <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
               Patrón de Referencia <span className="text-red-500">*</span>
             </label>
@@ -481,6 +496,84 @@ export default function NewCalibrationPage() {
                   ))}
                 </div>
               </div>
+
+              {/* ── Static Certificate Fields (ISO 7.8.4) ──────────────── */}
+              <div className="mt-4 p-4 rounded-md" style={{ backgroundColor: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
+                <h4 className="text-[12px] font-semibold flex items-center gap-1.5 mb-4" style={{ color: 'var(--text-main)' }}>
+                  <BookOpen size={13} style={{ color: C.accent }} />
+                  Fechas &amp; Datos del Certificado
+                  <span className="ml-auto text-[9px] px-2 py-0.5 rounded font-mono" style={{ backgroundColor: 'var(--border-color)', color: 'var(--text-muted)' }}>ISO 7.8.4</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Temperature uncertainty */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                      Incert. Temperatura <span style={{ color: 'var(--text-muted)' }}>(±°C)</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number" step="any" min="0" placeholder="1.0"
+                        value={tempUncertainty}
+                        onChange={e => setTempUncertainty(e.target.value)}
+                        className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono pr-10"
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-medium opacity-40">°C</span>
+                    </div>
+                    <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Incertidumbre del termómetro ambiental</span>
+                  </div>
+
+                  {/* Calibration date */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                      Fecha de Calibración
+                    </label>
+                    <input
+                      type="date"
+                      value={calibrationDate}
+                      onChange={e => setCalibrationDate(e.target.value)}
+                      className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono"
+                    />
+                    <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Fecha en que se realizó físicamente</span>
+                  </div>
+
+                  {/* Next calibration date — required */}
+                  <div className="space-y-1 sm:col-span-2 lg:col-span-2">
+                    <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                      Próxima Calibración <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={nextCalibrationDate}
+                      onChange={e => setNextCalibrationDate(e.target.value)}
+                      min={calibrationDate}
+                      className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono"
+                      style={!nextCalibrationDate ? { border: '1px solid #EF444460' } : undefined}
+                    />
+                    <span className="text-[9px]" style={{ color: nextCalibrationDate ? 'var(--text-muted)' : '#EF4444' }}>
+                      {nextCalibrationDate
+                        ? `Intervalo: ${Math.round((new Date(nextCalibrationDate).getTime() - new Date(calibrationDate).getTime()) / (1000 * 60 * 60 * 24 * 30))} meses`
+                        : 'Requerido — se imprime en el certificado ISO 17025'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Observaciones del técnico */}
+              <div className="space-y-1 mt-4">
+                <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  Observaciones del Técnico (ISO 7.8.2.j)
+                </label>
+                <textarea
+                  value={technicianObservation}
+                  onChange={e => setTechnicianObservation(e.target.value)}
+                  placeholder="Ingrese observaciones adicionales sobre la calibración (opcional)..."
+                  rows={3}
+                  className="w-full px-2.5 py-2 rounded input-theme text-xs"
+                  style={{ resize: 'vertical', minHeight: '60px' }}
+                />
+                <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Estas observaciones aparecerán en el certificado de calibración</span>
+              </div>
+
 
               {/* Strategy warning */}
               {!isStrategyImplemented && (

@@ -1,0 +1,112 @@
+/* ═══════════════════════════════════════════════════════════
+   Driver.js Custom Theme — NDT Lab System
+   Adapts to the app's dark/light mode via CSS variables
+═══════════════════════════════════════════════════════════ */
+
+/* Base popover */
+.driver-popover {
+  background-color: var(--bg-panel, #fff) !important;
+  color: var(--text-main, #1a1a2e) !important;
+  border: 1px solid var(--border-color, #e2e8f0) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255,255,255,0.05) !important;
+  max-width: 380px !important;
+  font-family: inherit !important;
+}
+
+/* Title */
+.driver-popover-title {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--text-main, #1a1a2e) !important;
+  line-height: 1.3 !important;
+  margin-bottom: 6px !important;
+}
+
+/* Description */
+.driver-popover-description {
+  font-size: 12px !important;
+  line-height: 1.65 !important;
+  color: var(--text-muted, #64748b) !important;
+  white-space: pre-line !important;
+}
+
+/* Extended mode: wider popover for detailed content */
+.ndt-tour-extended.driver-popover {
+  max-width: 440px !important;
+}
+
+.ndt-tour-extended .driver-popover-description {
+  font-size: 11.5px !important;
+  line-height: 1.7 !important;
+}
+
+/* Progress bar */
+.driver-popover-progress-text {
+  font-size: 10px !important;
+  color: var(--text-muted, #94a3b8) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.3px !important;
+}
+
+/* Navigation buttons */
+.driver-popover-navigation-btns {
+  gap: 6px !important;
+}
+
+.driver-popover-prev-btn,
+.driver-popover-next-btn {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  padding: 6px 14px !important;
+  border-radius: 6px !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.driver-popover-prev-btn {
+  background-color: var(--bg-hover, #f1f5f9) !important;
+  color: var(--text-main, #1a1a2e) !important;
+  border: 1px solid var(--border-color, #e2e8f0) !important;
+}
+
+.driver-popover-prev-btn:hover {
+  background-color: var(--border-color, #e2e8f0) !important;
+}
+
+.driver-popover-next-btn {
+  background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+  color: #fff !important;
+}
+
+.driver-popover-next-btn:hover {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+}
+
+/* Close button */
+.driver-popover-close-btn {
+  color: var(--text-muted, #94a3b8) !important;
+  font-size: 18px !important;
+  width: 28px !important;
+  height: 28px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 6px !important;
+  transition: background 0.15s ease !important;
+}
+
+.driver-popover-close-btn:hover {
+  background-color: var(--bg-hover, #f1f5f9) !important;
+}
+
+/* Arrow */
+.driver-popover-arrow {
+  border-color: var(--bg-panel, #fff) !important;
+}
+
+/* Highlighted stage */
+.driver-active-element {
+  border-radius: 8px !important;
+}

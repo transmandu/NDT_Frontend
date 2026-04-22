@@ -43,6 +43,8 @@ const instrumentSchema = z.object({
   resolution: z.coerce.number().positive('Debe ser > 0'),
   range_min: z.coerce.number().nullable().optional(),
   range_max: z.coerce.number().nullable().optional(),
+  emp: z.coerce.number().positive('Debe ser > 0').nullable().optional(),
+  calibration_interval_months: z.coerce.number().int().min(1).max(120).optional().default(12),
   location: z.string().nullable().optional(),
   status: z.enum(['active', 'inactive', 'in_calibration']),
   factory_standard_id: z.coerce.number().nullable().optional(),
@@ -221,19 +223,21 @@ export default function InstrumentsPage() {
   );
 
   return (
-    <div className="space-y-3 w-full animate-fadeIn">
+    <div id="tour-inst-page" className="space-y-3 w-full animate-fadeIn">
       {isLoading ? (
         <div className="panel rounded-md shadow-sm p-8 text-center text-[11px]" style={{ color: 'var(--text-muted)' }}>
           <Loader2 size={20} className="animate-spin mx-auto mb-2" style={{ color: COLORS.primary }} />
           Cargando instrumentos…
         </div>
       ) : (
+        <div id="tour-inst-table">
         <DataTable
           columns={columns}
           data={instruments}
           searchPlaceholder="Buscar por código, nombre o marca…"
           toolbarRight={
             <button
+              id="tour-inst-add-btn"
               onClick={() => { setEditTarget(null); setModalOpen(true); }}
               className="h-7 px-3 text-[11px] rounded font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95 hover:opacity-90 whitespace-nowrap"
               style={{ backgroundColor: C.accent, color: '#fff' }}
@@ -242,6 +246,7 @@ export default function InstrumentsPage() {
             </button>
           }
         />
+        </div>
       )}
 
       <AnimatePresence>
@@ -284,7 +289,9 @@ function InstrumentModal({ instrument, standards, instruments, onClose }: {
       model: instrument.model, serial_number: instrument.serial_number, category: instrument.category,
       unit: instrument.unit, resolution: instrument.resolution, range_min: instrument.range_min ?? undefined,
       range_max: instrument.range_max ?? undefined, location: instrument.location ?? '', status: (instrument.status as any) ?? 'active',
-    } : { status: 'active' },
+      emp: (instrument as any).emp ?? undefined,
+      calibration_interval_months: (instrument as any).calibration_interval_months ?? 12,
+    } : { status: 'active', calibration_interval_months: 12 },
   });
 
   useEffect(() => { if (selectedType && !isEdit) { setValue('internal_code', autoCode); setValue('category', selectedType.category); setValue('unit', selectedType.unit); } }, [selectedType, autoCode, isEdit, setValue]);
@@ -415,6 +422,27 @@ function InstrumentModal({ instrument, standards, instruments, onClose }: {
                         <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] pointer-events-none" style={{ color: 'var(--text-muted)' }}>{selectedUnit}</span>
                       </div>
                     </Field>
+                    {/* ── EMP & Interval (ISO 17025 conformity) ── */}
+                    <Field
+                      label="EMP — Error Máximo Permisible"
+                      error={errors.emp?.message}
+                      hint="Regla ISO: |Error| + U ≤ EMP. En la misma unidad del instrumento."
+                    >
+                      <div className="relative">
+                        <input {...register('emp')} type="number" step="any" placeholder="0.05" className="field-input font-mono pr-12" />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] pointer-events-none" style={{ color: 'var(--text-muted)' }}>{selectedUnit}</span>
+                      </div>
+                    </Field>
+                    <Field
+                      label="Intervalo de Recalibración"
+                      error={errors.calibration_interval_months?.message}
+                      hint="Meses entre calibraciones recomendados."
+                    >
+                      <div className="relative">
+                        <input {...register('calibration_interval_months')} type="number" step="1" min="1" max="120" placeholder="12" className="field-input font-mono pr-16" />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] pointer-events-none" style={{ color: 'var(--text-muted)' }}>meses</span>
+                      </div>
+                    </Field>
                   </div>
                 </Section>
 
@@ -509,12 +537,14 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   );
 }
 
-function Field({ label, error, children, className = '' }: { label: string; error?: string; children: React.ReactNode; className?: string }) {
+function Field({ label, error, hint, children, className = '' }: { label: string; error?: string; hint?: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={`space-y-1.5 ${className}`}>
       <label className="text-[10px] font-semibold uppercase tracking-wider block" style={{ color: 'var(--text-muted)' }}>{label}</label>
       {children}
+      {hint && !error && <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{hint}</p>}
       {error && <p className="text-[10px] text-red-400 flex items-center gap-1">⚠ {error}</p>}
     </div>
   );
 }
+

@@ -17,12 +17,13 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/stores/authStore';
 import {
   ArrowLeft, XCircle, ClipboardCheck, BookOpen,
-  ChevronDown, Minimize2, Sigma, Loader2,
+  ChevronDown, Minimize2, Sigma, Loader2, Download, FileCheck,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AuditMathBreakdown from '@/components/calibration/AuditMathBreakdown';
@@ -36,12 +37,15 @@ const COLORS = { primary: C.primary, success: C.success, danger: C.danger };
 /*  Main Component                                            */
 /* ══════════════════════════════════════════════════════════ */
 export default function CalibrationReview({ id, onBack }: { id: number; onBack: () => void }) {
-  const [session, setSession]           = useState<any>(null);
+  const [session, setSession]             = useState<any>(null);
   const [showProcedure, setShowProcedure] = useState(false);
-  const [rejectOpen, setRejectOpen]     = useState(false);
+  const [rejectOpen, setRejectOpen]       = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const [loading, setLoading]           = useState(true);
+  const [loading, setLoading]             = useState(true);
+  const [approvedCertId, setApprovedCertId] = useState<number | null>(null);
+  const [downloading, setDownloading]     = useState(false);
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
 
   const isAuditor = user?.role === 'auditor' || user?.role === 'admin';
   const isPending = session?.status === 'pending_review';
@@ -57,13 +61,41 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
   const handleApprove = async () => {
     setActionLoading(true);
     try {
-      await api.post(`/calibration/sessions/${id}/approve`);
-      toast.success('Sesión aprobada — certificado emitido');
-      onBack();
+      const res = await api.post(`/calibration/sessions/${id}/approve`);
+      const { certificate_id, pdf_ready } = res.data;
+      // Invalidate caches so the lists update immediately
+      queryClient.invalidateQueries({ queryKey: ['calibrationSessions'] });
+      queryClient.invalidateQueries({ queryKey: ['certificates'] });
+      if (certificate_id && pdf_ready) {
+        setApprovedCertId(certificate_id);
+        toast.success('Sesion aprobada - certificado generado');
+      } else {
+        toast.success('Sesion aprobada - certificado emitido');
+        onBack();
+      }
     } catch {
-      toast.error('Error al aprobar la sesión');
+      toast.error('Error al aprobar la sesion');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleDownloadCert = async (certId: number, certNumber?: string) => {
+    setDownloading(true);
+    try {
+      const res = await api.get(`/certificates/${certId}/download`, { responseType: 'blob' });
+      const url  = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${certNumber || `CERT-${certId}`}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Error al descargar el certificado');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -71,10 +103,12 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
     setActionLoading(true);
     try {
       await api.post(`/calibration/sessions/${id}/reject`, { reason });
-      toast.success('Sesión rechazada — el técnico fue notificado');
+      // Invalidate cache so the pending list updates
+      queryClient.invalidateQueries({ queryKey: ['calibrationSessions'] });
+      toast.success('Sesion rechazada - el tecnico fue notificado');
       onBack();
     } catch {
-      toast.error('Error al rechazar la sesión');
+      toast.error('Error al rechazar la sesion');
     } finally {
       setActionLoading(false);
       setRejectOpen(false);
@@ -263,6 +297,63 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
               style={{ backgroundColor: C.accent }}>
               {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <ClipboardCheck size={14} />}
               Aprobar y Emitir Certificado
+            </button>
+          </div>
+        )}
+
+        {/* Post-approval download banner */}
+        <AnimatePresence>
+          {approvedCertId && (
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+              className="mt-6 rounded-xl p-5 flex flex-col sm:flex-row items-center gap-4"
+              style={{ background: 'linear-gradient(135deg,#10b98115,#6366f115)', border: '1px solid #10b98140' }}
+            >
+              <div className="flex items-center justify-center w-12 h-12 rounded-full shrink-0"
+                style={{ backgroundColor: '#10b98120', border: '2px solid #10b98140' }}>
+                <FileCheck size={22} style={{ color: '#10b981' }} />
+              </div>
+              <div className="flex-1 text-center sm:text-left">
+                <p className="text-sm font-bold" style={{ color: 'var(--text-main)' }}>
+                  Certificado ISO 17025 Generado
+                </p>
+                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  El PDF fue creado y firmado con hash SHA-256. Descárguelo o vuelva a la bandeja.
+                </p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={() => handleDownloadCert(approvedCertId, session?.certificate_code)}
+                  disabled={downloading}
+                  className="h-9 px-4 rounded-md text-xs font-semibold text-white flex items-center gap-2 disabled:opacity-60 transition-opacity"
+                  style={{ backgroundColor: '#10b981' }}
+                >
+                  {downloading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                  Descargar PDF
+                </button>
+                <button onClick={onBack}
+                  className="h-9 px-4 rounded-md text-xs font-medium hover-bg transition-colors"
+                  style={{ border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+                  Volver
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Download button for already-approved sessions */}
+        {session?.status === 'approved' && !approvedCertId && session?.certificate && (
+          <div className="mt-4 pt-4 flex justify-end" style={{ borderTop: '1px solid var(--border-color)' }}>
+            <button
+              onClick={() => handleDownloadCert(session.certificate.id, session.certificate_code)}
+              disabled={downloading}
+              className="h-8 px-4 rounded-md text-xs font-semibold flex items-center gap-1.5 disabled:opacity-60 transition-opacity"
+              style={{ backgroundColor: C.primary, color: '#fff' }}
+            >
+              {downloading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+              Descargar Certificado PDF
             </button>
           </div>
         )}

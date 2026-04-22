@@ -238,19 +238,21 @@ export default function StandardsPage() {
   );
 
   return (
-    <div className="space-y-3 w-full animate-fadeIn">
+    <div id="tour-std-page" className="space-y-3 w-full animate-fadeIn">
       {isLoading ? (
         <div className="panel rounded-md shadow-sm p-8 text-center text-[11px]" style={{ color: 'var(--text-muted)' }}>
           <Loader2 size={20} className="animate-spin mx-auto mb-2" style={{ color: COLORS.success }} />
           Cargando patrones de referencia…
         </div>
       ) : (
+        <div id="tour-std-table">
         <DataTable
           columns={columns}
           data={standards}
           searchPlaceholder="Buscar por código, nombre o certificado…"
           toolbarRight={
             <button
+              id="tour-std-add-btn"
               onClick={() => { setEditTarget(null); setModalOpen(true); }}
               className="h-7 px-3 text-[11px] rounded font-semibold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 hover:opacity-90 whitespace-nowrap"
               style={{ backgroundColor: C.accent, color: '#fff' }}
@@ -259,6 +261,7 @@ export default function StandardsPage() {
             </button>
           }
         />
+        </div>
       )}
 
       <AnimatePresence>

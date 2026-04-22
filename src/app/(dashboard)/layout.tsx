@@ -8,6 +8,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import { Toaster } from 'react-hot-toast';
 import { AnimatePresence, motion } from 'framer-motion';
+import '@/styles/driver-theme.css';
 
 const viewInfo: Record<string, { title: string; subtitle: string; autoSave?: boolean }> = {
   '/dashboard':        { title: 'Dashboard',   subtitle: 'Resumen operativo Orinoko Quality & Control' },

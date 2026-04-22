@@ -1,18 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
-import { Eye, Download } from 'lucide-react';
+import { Eye, Download, Loader2, FileCheck, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CalibrationReview from '@/components/calibration/CalibrationReview';
+import toast from 'react-hot-toast';
 
 import { C } from '@/lib/colors';
 const COLORS = { primary: C.primary, success: C.success, warning: C.warning, danger: C.danger };
 
 const statusLabels: Record<string, string> = {
-  draft: 'Borrador', pending_review: 'En RevisiÃ³n', approved: 'Aprobado', rejected: 'Rechazado',
+  draft: 'Borrador', pending_review: 'En Revisión', approved: 'Aprobado', rejected: 'Rechazado',
 };
 const statusColors: Record<string, string> = {
   draft: COLORS.warning, pending_review: COLORS.primary, approved: COLORS.success, rejected: COLORS.danger,
@@ -21,6 +22,7 @@ const statusColors: Record<string, string> = {
 export default function CalibrationPage() {
   const [activeTab, setActiveTab] = useState<'pending' | 'drafts' | 'rejected' | 'issued'>('pending');
   const [reviewingId, setReviewingId] = useState<number | null>(null);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -28,20 +30,45 @@ export default function CalibrationPage() {
     const reviewId = searchParams.get('review');
     if (reviewId) {
       setReviewingId(Number(reviewId));
-      router.replace('/calibration', undefined); // Limpia la URL para evitar recargas raras
+      router.replace('/calibration', undefined);
     }
   }, [searchParams, router]);
 
   const { data: sessions = [], isLoading } = useQuery<any[]>({
     queryKey: ['calibrationSessions'],
     queryFn: () => api.get('/calibration/sessions').then(r => r.data.data || []),
-    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: certificates = [], isLoading: loadingCerts, refetch: refetchCerts } = useQuery<any[]>({
+    queryKey: ['certificates'],
+    queryFn: () => api.get('/certificates').then(r => r.data.data || []),
+    enabled: activeTab === 'issued',
+    staleTime: 1000 * 30,
   });
 
   const pending  = sessions.filter((s: any) => s.status === 'pending_review');
   const drafts   = sessions.filter((s: any) => s.status === 'draft');
   const rejected = sessions.filter((s: any) => s.status === 'rejected');
-  const issued   = sessions.filter((s: any) => s.status === 'approved');
+
+  const handleDownload = async (certId: number, certNumber: string) => {
+    setDownloadingId(certId);
+    try {
+      const res = await api.get(`/certificates/${certId}/download`, { responseType: 'blob' });
+      const url  = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${certNumber}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast.error('No se pudo descargar el certificado');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   if (reviewingId) {
     return <CalibrationReview id={reviewingId} onBack={() => setReviewingId(null)} />;
@@ -52,7 +79,7 @@ export default function CalibrationPage() {
       {/* Tabs */}
       <div id="tour-cert-tabs" className="flex flex-wrap mb-4 gap-1" style={{ borderBottom: '1px solid var(--border-color)' }}>
         {([
-          ['pending',  `En RevisiÃ³n (${pending.length})`],
+          ['pending',  `En Revisión (${pending.length})`],
           ['drafts',   `Borradores (${drafts.length})`],
           ['rejected', `Rechazadas (${rejected.length})`],
           ['issued',   'Certificados Emitidos'],
@@ -72,9 +99,9 @@ export default function CalibrationPage() {
               <tr>
                 <th className="px-4 py-2 th-theme text-[11px]">ID Borrador</th>
                 <th className="px-4 py-2 th-theme text-[11px]">Instrumento</th>
-                <th className="px-4 py-2 th-theme text-[11px]">TÃ©cnico</th>
-                <th className="px-4 py-2 th-theme text-[11px]">Fecha MediciÃ³n</th>
-                <th className="px-4 py-2 th-theme text-right">AcciÃ³n</th>
+                <th className="px-4 py-2 th-theme text-[11px]">Técnico</th>
+                <th className="px-4 py-2 th-theme text-[11px]">Fecha Medición</th>
+                <th className="px-4 py-2 th-theme text-right">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
@@ -116,9 +143,9 @@ export default function CalibrationPage() {
               <tr>
                 <th className="px-4 py-2 th-theme text-[11px]">ID</th>
                 <th className="px-4 py-2 th-theme text-[11px]">Instrumento</th>
-                <th className="px-4 py-2 th-theme text-[11px]">TÃ©cnico</th>
+                <th className="px-4 py-2 th-theme text-[11px]">Técnico</th>
                 <th className="px-4 py-2 th-theme text-[11px]">Fecha</th>
-                <th className="px-4 py-2 th-theme text-right">AcciÃ³n</th>
+                <th className="px-4 py-2 th-theme text-right">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
@@ -158,9 +185,9 @@ export default function CalibrationPage() {
               <tr>
                 <th className="px-4 py-2 th-theme text-[11px]">ID</th>
                 <th className="px-4 py-2 th-theme text-[11px]">Instrumento</th>
-                <th className="px-4 py-2 th-theme text-[11px]">TÃ©cnico</th>
+                <th className="px-4 py-2 th-theme text-[11px]">Técnico</th>
                 <th className="px-4 py-2 th-theme text-[11px]">Motivo</th>
-                <th className="px-4 py-2 th-theme text-right">AcciÃ³n</th>
+                <th className="px-4 py-2 th-theme text-right">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
@@ -193,40 +220,97 @@ export default function CalibrationPage() {
           </table>
         </div>
       ) : (
+        /* ── CERTIFICADOS EMITIDOS ── */
         <div className="panel rounded-md shadow-sm overflow-x-auto w-full">
-          <table className="w-full text-left text-xs min-w-[500px]">
+          <table className="w-full text-left text-xs min-w-[600px]">
             <thead>
               <tr>
-                <th className="px-4 py-2 th-theme text-[11px]">NÂº Certificado</th>
+                <th className="px-4 py-2 th-theme text-[11px]">Nº Certificado</th>
                 <th className="px-4 py-2 th-theme text-[11px]">Instrumento</th>
-                <th className="px-4 py-2 th-theme text-[11px] hidden sm:table-cell">Fecha EmisiÃ³n</th>
-                <th className="px-4 py-2 th-theme text-[11px]">U. Expandida</th>
+                <th className="px-4 py-2 th-theme text-[11px]">S/N</th>
+                <th className="px-4 py-2 th-theme text-[11px] hidden sm:table-cell">Fecha Cal.</th>
+                <th className="px-4 py-2 th-theme text-[11px] hidden sm:table-cell">Próxima Cal.</th>
+                <th className="px-4 py-2 th-theme text-[11px]">Conformidad</th>
                 <th className="px-4 py-2 th-theme text-right">Documento</th>
               </tr>
             </thead>
-            <tbody>
-              {isLoading ? (
+            <tbody className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
+              {loadingCerts ? (
                 Array.from({ length: 4 }).map((_, i) => (
-                  <tr key={`skel-i-${i}`} className="td-theme border-b border-[var(--border-color)]">
-                    <td colSpan={5} className="px-4 py-3.5">
+                  <tr key={`skel-i-${i}`}>
+                    <td colSpan={7} className="px-4 py-3.5">
                       <div className="h-4 rounded animate-pulse w-full" style={{ backgroundColor: 'var(--bg-hover)' }} />
                     </td>
                   </tr>
                 ))
-              ) : issued.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-[11px]" style={{ color: 'var(--text-muted)' }}>No hay certificados emitidos</td></tr>
+              ) : certificates.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center">
+                    <div className="flex flex-col items-center gap-2" style={{ color: 'var(--text-muted)' }}>
+                      <FileCheck size={28} className="opacity-30" />
+                      <span className="text-[11px]">No hay certificados emitidos aún.</span>
+                      <span className="text-[10px] opacity-70">Los certificados aparecen aquí al aprobar una sesión de calibración.</span>
+                    </div>
+                  </td>
+                </tr>
               ) : (
-                issued.map(s => (
-                  <tr key={s.id} className="td-theme hover-bg transition-colors">
-                    <td className="px-4 py-2.5 font-medium whitespace-nowrap">{s.certificate_code || `CERT-${s.id}`}</td>
-                    <td className="px-4 py-2.5" style={{ color: 'var(--text-muted)' }}>{s.instrument?.name || 'â€”'}</td>
-                    <td className="px-4 py-2.5 hidden sm:table-cell" style={{ color: 'var(--text-muted)' }}>{new Date(s.approved_at || s.updated_at).toLocaleDateString('es')}</td>
-                    <td className="px-4 py-2.5 font-mono text-[11px]">Â± â€”</td>
+                certificates.map((cert: any) => (
+                  <tr key={cert.id} className="td-theme hover-bg transition-colors">
+                    <td className="px-4 py-2.5 font-mono font-bold text-[11px]" style={{ color: COLORS.primary }}>
+                      {cert.certificate_number}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <p className="font-medium text-[11px]">{cert.instrument_name || '—'}</p>
+                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{cert.instrument_code}</p>
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                      {cert.instrument_serial || '—'}
+                    </td>
+                    <td className="px-4 py-2.5 hidden sm:table-cell text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                      {cert.calibration_date ? new Date(cert.calibration_date).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric' }) : '—'}
+                    </td>
+                    <td className="px-4 py-2.5 hidden sm:table-cell text-[11px]">
+                      {cert.next_calibration_date
+                        ? <span style={{ color: new Date(cert.next_calibration_date) < new Date() ? COLORS.danger : COLORS.success }}>
+                            {new Date(cert.next_calibration_date).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric' })}
+                          </span>
+                        : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {cert.conforms === true && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold"
+                          style={{ backgroundColor: '#10b98115', color: '#10b981', border: '1px solid #10b98130' }}>
+                          ✓ Conforme
+                        </span>
+                      )}
+                      {cert.conforms === false && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold"
+                          style={{ backgroundColor: `${COLORS.danger}15`, color: COLORS.danger, border: `1px solid ${COLORS.danger}30` }}>
+                          ✗ No Conforme
+                        </span>
+                      )}
+                      {cert.conforms === null && (
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>No eval.</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5 text-right">
-                      <button className="inline-flex items-center justify-center rounded text-[11px] font-medium transition-colors h-7 px-2 hover-bg gap-1.5"
-                        style={{ border: '1px solid var(--border-color)' }}>
-                        <Download size={12} /> <span className="hidden sm:inline">PDF</span>
-                      </button>
+                      {cert.pdf_ready ? (
+                        <button
+                          onClick={() => handleDownload(cert.id, cert.certificate_number)}
+                          disabled={downloadingId === cert.id}
+                          className="inline-flex items-center justify-center rounded text-[11px] font-semibold transition-all h-7 px-3 gap-1.5 text-white disabled:opacity-60"
+                          style={{ backgroundColor: COLORS.primary }}
+                        >
+                          {downloadingId === cert.id
+                            ? <Loader2 size={12} className="animate-spin" />
+                            : <Download size={12} />}
+                          PDF
+                        </button>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          <AlertCircle size={11} /> Generando…
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -238,4 +322,3 @@ export default function CalibrationPage() {
     </div>
   );
 }
-
