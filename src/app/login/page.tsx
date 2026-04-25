@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
 import { motion } from 'framer-motion';
+import { C } from '@/lib/colors';
 import { Eye, EyeOff, ShieldCheck } from 'lucide-react';
 
 export default function LoginPage() {
@@ -40,7 +41,7 @@ export default function LoginPage() {
         {/* Brand */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl font-bold text-white text-xl shadow-lg mx-auto mb-4" style={{ backgroundColor: '#FFA526' }}>
-            H7
+            OQC
           </div>
           <h1 className="text-xl font-bold tracking-tight" style={{ color: '#FF4712' }}>Transmandu</h1>
           <p className="text-[10px] uppercase tracking-widest font-semibold mt-1" style={{ color: 'var(--text-muted)' }}>Lab NDT · ISO/IEC 17025</p>
@@ -90,7 +91,7 @@ export default function LoginPage() {
             <motion.button type="submit" disabled={loading}
               whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
               className="w-full h-9 rounded text-xs font-semibold text-white shadow-md transition-all disabled:opacity-50"
-              style={{ backgroundColor: '#FFA526' }}>
+              style={{ backgroundColor: C.accent }}>
               {loading ? 'Verificando...' : 'Ingresar al Sistema'}
             </motion.button>
           </form>

@@ -110,11 +110,41 @@ export interface Standard {
   id: number;
   internal_code: string;
   name: string;
-  brand: string;
+  brand: string | null;
+  model: string | null;
+  serial_number: string | null;
+  resolution: number | null;
+  unit: string | null;
   category: string;
   certificate_number: string;
   uncertainty_u: number;
   k_factor: number;
+  calibration_date: string | null;
   expiry_date: string;
-  calibrated_by_lab: string;
+  calibrated_by_lab: string | null;
+  traceability_chain: any[] | null;
+  /* Category-specific metrological fields */
+  drift_rate_per_year: number | null; // Mass: OIML drift
+  oiml_class: string | null;           // Mass: E1, E2, F1, F2, M1…
+  mass_density: number | null;         // Mass: kg/m³ for air buoyancy
+  uncertainty_slope: number | null;    // Dimensional: b in U=a+b·L
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProcedureSchema {
+  id: number;
+  code: string;
+  name: string;
+  description: string | null;
+  version: string;
+  category: string;
+  is_active: boolean;
+  ui_schema: ProcedureUiSchema;
+  validation_rules: Record<string, any> | null;
+  math_config: Record<string, any> | null;
+  calibration_sessions_count?: number;
+  has_strategy?: boolean;
+  created_at: string;
+  updated_at: string;
 }

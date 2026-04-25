@@ -1,17 +1,20 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import api from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calculator, Send, Save, Loader2, Info, BookOpen, ChevronDown, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Instrument, Standard, GridSchema } from '@/types/calibration';
 import DynamicGrid, { type GridData } from '@/components/calibration/DynamicGrid';
+import { isSameCategory } from '@/lib/categoryUtils';
 
 import { useQuery } from '@tanstack/react-query';
 
-const COLORS = { primary: '#FFA526', success: '#10B981' };
+import { C } from '@/lib/colors';
+const COLORS = { primary: C.primary, success: C.success };
 
 // Strategies that are fully implemented in the backend
 const IMPLEMENTED_STRATEGIES = ['ME-005', 'ME-003', 'EL-001', 'M-LAB-01', 'ISO-6789', 'DIM-001'];
@@ -38,11 +41,17 @@ export default function NewCalibrationPage() {
   const loading = loadingInstruments || loadingStandards || loadingSchemas;
 
   // ─── Selections ───
-  const [selectedInstrument, setSelectedInstrument] = useState('');
+  const searchParams = useSearchParams();
+  const [selectedInstrument, setSelectedInstrument] = useState(searchParams.get('instrument_id') || '');
   const [selectedStandard, setSelectedStandard] = useState('');
 
-  // ─── Environmental / Metadata ───
+  // ── Environmental / Metadata ──
   const [environmentalData, setEnvironmentalData] = useState<Record<string, string>>({});
+  // ── Certificate dates (static fields — not driven by schema) ──
+  const [calibrationDate, setCalibrationDate]         = useState(() => new Date().toISOString().split('T')[0]);
+  const [nextCalibrationDate, setNextCalibrationDate] = useState('');
+  const [technicianObservation, setTechnicianObservation] = useState('');
+  const [tempUncertainty, setTempUncertainty]         = useState('1.0'); // ±°C
 
   // ─── Grid data storage: gridId → { rowIdx → { colKey → value } } ───
   const [gridDataMap, setGridDataMap] = useState<Record<string, GridData>>({});
@@ -58,6 +67,9 @@ export default function NewCalibrationPage() {
     setBudgetResult(null);
     setGridDataMap({});
     setEnvironmentalData({});
+    setNextCalibrationDate('');
+    setTempUncertainty('1.0');
+    setCalibrationDate(new Date().toISOString().split('T')[0]);
     setValidationErrors({});
   }, [selectedInstrument]);
 
@@ -82,18 +94,25 @@ export default function NewCalibrationPage() {
 
   // Filter standards by selected instrument's category
   const filteredStandards: Standard[] = selectedInst
-    ? standards.filter((s: Standard) => s.category?.toLowerCase() === selectedInst.category?.toLowerCase())
+    ? standards.filter((s: Standard) => isSameCategory(s.category, selectedInst.category))
     : standards;
 
-  // Reset standard when instrument changes and it no longer matches
+  // Auto-preselect factory_standard when instrument changes
   useEffect(() => {
-    if (selectedStandard && filteredStandards.length > 0) {
-      const stillValid = filteredStandards.some((s: Standard) => String(s.id) === selectedStandard);
-      if (!stillValid) setSelectedStandard('');
+    if (!selectedInst) return;
+    if (filteredStandards.length === 0) { setSelectedStandard(''); return; }
+
+    // 1. Try to match factory_standard_id registered on the instrument
+    if ((selectedInst as any).factory_standard_id) {
+      const factoryMatch = filteredStandards.find(s => s.id === (selectedInst as any).factory_standard_id);
+      if (factoryMatch) { setSelectedStandard(String(factoryMatch.id)); return; }
     }
-    // Auto-select if only one standard matches
-    if (filteredStandards.length === 1 && !selectedStandard) {
-      setSelectedStandard(String(filteredStandards[0].id));
+    // 2. Auto-select if only one standard matches the category
+    if (filteredStandards.length === 1) { setSelectedStandard(String(filteredStandards[0].id)); return; }
+    // 3. Clear if currently selected standard no longer matches
+    if (selectedStandard) {
+      const stillValid = filteredStandards.some(s => String(s.id) === selectedStandard);
+      if (!stillValid) setSelectedStandard('');
     }
   }, [selectedInstrument, filteredStandards]);
 
@@ -106,14 +125,12 @@ export default function NewCalibrationPage() {
   const buildPayload = useCallback(() => {
     const payload: Record<string, any> = {};
 
-    // Add instrument resolution and standard info
+    // instrument_resolution is required by all backend strategies.
     if (selectedInst) {
       payload.instrument_resolution = selectedInst.resolution;
     }
-    if (selectedStd) {
-      payload.standard_uncertainty_u = selectedStd.uncertainty_u;
-      payload.standard_k_factor = selectedStd.k_factor;
-    }
+    // NOTE: standard_uncertainty_u and standard_k_factor are read exclusively from
+    // the immutable BD snapshot — they must NOT travel in the payload.
 
     // Add environmental metadata
     payload.metadata = { ...environmentalData };
@@ -197,6 +214,7 @@ export default function NewCalibrationPage() {
   const validateFields = useCallback((): boolean => {
     if (!selectedInstrument) { toast.error('Seleccione un instrumento'); return false; }
     if (!selectedStandard) { toast.error('Seleccione un patrón de referencia'); return false; }
+    if (!nextCalibrationDate) { toast.error('Indique la fecha de próxima calibración'); return false; }
 
     // Validate environmental requirements
     const metaReqs = matchedSchema?.ui_schema?.metadata_requirements || [];
@@ -262,10 +280,13 @@ export default function NewCalibrationPage() {
         procedure_schema_id: matchedSchema.id,
         category: selectedInst?.category || '',
         ambient_temperature: parseFloat(environmentalData.air_temperature || '20'),
+        ambient_temperature_uncertainty: parseFloat(tempUncertainty || '1.0'),
         ambient_humidity: parseFloat(environmentalData.humidity || '50'),
         ambient_pressure: environmentalData.ambient_pressure ? parseFloat(environmentalData.ambient_pressure) : null,
-        observation: null,
+        observation: technicianObservation || null,
         standard_ids: [parseInt(selectedStandard)],
+        calibration_date: calibrationDate || new Date().toISOString().split('T')[0],
+        next_calibration_date: nextCalibrationDate || null,
       });
 
       // Update the session with raw payload
@@ -303,10 +324,13 @@ export default function NewCalibrationPage() {
         procedure_schema_id: matchedSchema.id,
         category: selectedInst?.category || '',
         ambient_temperature: parseFloat(environmentalData.air_temperature || '20'),
+        ambient_temperature_uncertainty: parseFloat(tempUncertainty || '1.0'),
         ambient_humidity: parseFloat(environmentalData.humidity || '50'),
         ambient_pressure: environmentalData.ambient_pressure ? parseFloat(environmentalData.ambient_pressure) : null,
-        observation: null,
+        observation: technicianObservation || null,
         standard_ids: [parseInt(selectedStandard)],
+        calibration_date: calibrationDate || new Date().toISOString().split('T')[0],
+        next_calibration_date: nextCalibrationDate || null,
       });
 
       const sessionId = createRes.data.session_id;
@@ -343,7 +367,7 @@ export default function NewCalibrationPage() {
       {/* ══════════════════════════════════════════════════════ */}
       {/* ═══ PASO 1: SELECCIÓN + CONDICIONES AMBIENTALES ═══  */}
       {/* ══════════════════════════════════════════════════════ */}
-      <div className="panel rounded-md shadow-sm p-5 w-full">
+      <div id="tour-cal-step1" className="panel rounded-md shadow-sm p-5 w-full">
         <h3 className="text-sm font-semibold mb-5 flex items-center gap-2" style={{ color: 'var(--text-main)' }}>
           <StepBadge n={1} />
           Identificación del Ensayo
@@ -351,7 +375,7 @@ export default function NewCalibrationPage() {
 
         {/* Instrument + Standard selectors */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="space-y-1.5">
+          <div id="tour-cal-instrument" className="space-y-1.5">
             <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
               Equipo a Calibrar <span className="text-red-500">*</span>
             </label>
@@ -366,13 +390,14 @@ export default function NewCalibrationPage() {
               ))}
             </select>
           </div>
-          <div className="space-y-1.5">
+          <div id="tour-cal-standard" className="space-y-1.5">
             <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
               Patrón de Referencia <span className="text-red-500">*</span>
             </label>
             <select value={selectedStandard}
               onChange={e => setSelectedStandard(e.target.value)}
-              className="w-full h-9 px-3 rounded input-theme text-xs">
+              disabled={!!selectedInst && filteredStandards.length === 0}
+              className="w-full h-9 px-3 rounded input-theme text-xs disabled:opacity-50 disabled:cursor-not-allowed">
               <option value="">{selectedInst ? `— Patrones de ${selectedInst.category} —` : '— Seleccione Instrumento primero —'}</option>
               {filteredStandards.map(s => (
                 <option key={s.id} value={s.id}>
@@ -380,6 +405,32 @@ export default function NewCalibrationPage() {
                 </option>
               ))}
             </select>
+
+            {/* ── No-standards warning ─────────────────────── */}
+            <AnimatePresence>
+              {selectedInst && filteredStandards.length === 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, height: 0 }}
+                  animate={{ opacity: 1, y: 0, height: 'auto' }}
+                  exit={{ opacity: 0, y: -6, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <div className="flex items-start gap-2 px-3 py-2.5 rounded-md text-[11px] mt-1"
+                    style={{ backgroundColor: '#EF444410', border: '1px solid #EF444435', color: '#EF4444' }}>
+                    <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                    <span>
+                      No hay patrones de referencia registrados para la categoría{' '}
+                      <strong className="font-semibold">"{selectedInst.category}"</strong>.{' '}
+                      Sin un patrón válido no es posible calibrar este equipo.{' '}
+                      <Link href={`/standards?new=${selectedInst.category}`} className="underline font-semibold hover:opacity-80 transition-opacity">
+                        Registrar patrón →
+                      </Link>
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
@@ -445,6 +496,84 @@ export default function NewCalibrationPage() {
                   ))}
                 </div>
               </div>
+
+              {/* ── Static Certificate Fields (ISO 7.8.4) ──────────────── */}
+              <div className="mt-4 p-4 rounded-md" style={{ backgroundColor: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
+                <h4 className="text-[12px] font-semibold flex items-center gap-1.5 mb-4" style={{ color: 'var(--text-main)' }}>
+                  <BookOpen size={13} style={{ color: C.accent }} />
+                  Fechas &amp; Datos del Certificado
+                  <span className="ml-auto text-[9px] px-2 py-0.5 rounded font-mono" style={{ backgroundColor: 'var(--border-color)', color: 'var(--text-muted)' }}>ISO 7.8.4</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Temperature uncertainty */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                      Incert. Temperatura <span style={{ color: 'var(--text-muted)' }}>(±°C)</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number" step="any" min="0" placeholder="1.0"
+                        value={tempUncertainty}
+                        onChange={e => setTempUncertainty(e.target.value)}
+                        className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono pr-10"
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-medium opacity-40">°C</span>
+                    </div>
+                    <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Incertidumbre del termómetro ambiental</span>
+                  </div>
+
+                  {/* Calibration date */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                      Fecha de Calibración
+                    </label>
+                    <input
+                      type="date"
+                      value={calibrationDate}
+                      onChange={e => setCalibrationDate(e.target.value)}
+                      className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono"
+                    />
+                    <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Fecha en que se realizó físicamente</span>
+                  </div>
+
+                  {/* Next calibration date — required */}
+                  <div className="space-y-1 sm:col-span-2 lg:col-span-2">
+                    <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                      Próxima Calibración <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={nextCalibrationDate}
+                      onChange={e => setNextCalibrationDate(e.target.value)}
+                      min={calibrationDate}
+                      className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono"
+                      style={!nextCalibrationDate ? { border: '1px solid #EF444460' } : undefined}
+                    />
+                    <span className="text-[9px]" style={{ color: nextCalibrationDate ? 'var(--text-muted)' : '#EF4444' }}>
+                      {nextCalibrationDate
+                        ? `Intervalo: ${Math.round((new Date(nextCalibrationDate).getTime() - new Date(calibrationDate).getTime()) / (1000 * 60 * 60 * 24 * 30))} meses`
+                        : 'Requerido — se imprime en el certificado ISO 17025'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Observaciones del técnico */}
+              <div className="space-y-1 mt-4">
+                <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  Observaciones del Técnico (ISO 7.8.2.j)
+                </label>
+                <textarea
+                  value={technicianObservation}
+                  onChange={e => setTechnicianObservation(e.target.value)}
+                  placeholder="Ingrese observaciones adicionales sobre la calibración (opcional)..."
+                  rows={3}
+                  className="w-full px-2.5 py-2 rounded input-theme text-xs"
+                  style={{ resize: 'vertical', minHeight: '60px' }}
+                />
+                <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Estas observaciones aparecerán en el certificado de calibración</span>
+              </div>
+
 
               {/* Strategy warning */}
               {!isStrategyImplemented && (
@@ -514,7 +643,7 @@ export default function NewCalibrationPage() {
                 <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                   onClick={handleSubmit} disabled={submitting || !isStrategyImplemented}
                   className="h-10 px-6 rounded-md text-xs font-semibold text-white shadow-md flex items-center gap-2 transition-colors disabled:opacity-50"
-                  style={{ backgroundColor: isStrategyImplemented ? COLORS.primary : '#6b7280' }}>
+                  style={{ backgroundColor: isStrategyImplemented ? C.accent : '#6b7280' }}>
                   {submitting ? <Loader2 size={14} className="animate-spin" /> : <Calculator size={14} />}
                   Procesar GUM e Enviar a Revisión
                 </motion.button>
@@ -555,7 +684,7 @@ export default function NewCalibrationPage() {
               <div className="mt-6 pt-4 flex justify-end" style={{ borderTop: '1px solid var(--border-color)' }}>
                 <button onClick={() => router.push('/calibration')}
                   className="h-9 px-6 rounded text-[11px] font-medium text-white shadow-sm flex items-center gap-1.5 transition-transform active:scale-95"
-                  style={{ backgroundColor: COLORS.success }}>
+                  style={{ backgroundColor: C.accent }}>
                   <Send size={14} /> Ver en Bandeja de Revisión
                 </button>
               </div>

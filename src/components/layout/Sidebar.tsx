@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Home, FileBarChart, Wrench, ShieldCheck, ClipboardCheck,
-  ChevronDown, ChevronLeft, ChevronRight, User
+  ChevronDown, ChevronLeft, ChevronRight, User, Users, FileCode2
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -63,7 +63,7 @@ export default function Sidebar({ isOpen, onToggle }: { isOpen: boolean; onToggl
               Orinoco Q&amp;C
             </h1>
             <p className="text-[9px] uppercase tracking-wider font-semibold truncate" style={{ color: 'var(--text-muted)' }}>
-              Lab NDT · ISO 17025
+              LAB NDT - TRANSMANDU, C.A.
             </p>
           </div>
         </div>
@@ -94,16 +94,28 @@ export default function Sidebar({ isOpen, onToggle }: { isOpen: boolean; onToggl
                   className="overflow-hidden mt-1 ml-1.5 pl-1.5 space-y-0.5"
                   style={{ borderLeft: '1px solid var(--border-color)' }}
                 >
-                  <NavItem href="/calibration/new"  icon={<FileBarChart size={14} />}  label="Nueva Calibración" />
-                  <NavItem href="/instruments"      icon={<Wrench size={14} />}        label="Instrumentos" />
-                  <NavItem href="/standards"        icon={<ShieldCheck size={14} />}   label="Patrones" />
+                  <NavItem href="/calibration/new"  icon={<FileBarChart size={14} />}   label="Nueva Calibración" />
+                  <NavItem href="/instruments"      icon={<Wrench size={14} />}         label="Instrumentos" />
+                  <NavItem href="/standards"        icon={<ShieldCheck size={14} />}    label="Patrones" />
                   <NavItem href="/calibration"      icon={<ClipboardCheck size={14} />} label="Revisión y Emisión" />
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
         </div>
+
+          {/* ── Admin section ── */}
+          {(user?.role === 'admin') && (
+            <div className="px-3 mt-1">
+              <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Administración</p>
+              <div className="space-y-0.5">
+                <NavItem href="/admin/users" icon={<Users size={14} />} label="Usuarios" />
+                <NavItem href="/schemas"      icon={<FileCode2 size={14} />} label="Esquemas" />
+              </div>
+            </div>
+          )}
       </div>
+    
 
       {/* ── Usuario ── */}
       <div className="p-3 shrink-0" style={{ borderTop: '1px solid var(--border-color)' }}>

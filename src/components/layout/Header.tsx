@@ -5,11 +5,13 @@ import { useAuthStore } from '@/stores/authStore';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, Sun, Moon, Menu, MapPin, CloudSun, Droplets, Save, LogOut,
-         ClipboardCheck, AlertCircle, Clock, X, CheckCircle2,
+         ClipboardCheck, AlertCircle, Clock, X, CheckCircle2, HelpCircle, Zap, BookOpen,
          Cloud, CloudRain, CloudLightning, CloudSnow, CloudFog, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import api from '@/lib/api';
 import { useWeather } from '@/lib/useWeather';
+import { usePathname } from 'next/navigation';
+import { useTutorial } from '@/lib/tutorials/useTutorial';
 
 interface Notification {
   id: string;
@@ -51,7 +53,11 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
   const [isOpen, setIsOpen]   = useState(false);
   const [data, setData]       = useState<NotificationsResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
   const panelRef              = useRef<HTMLDivElement>(null);
+  const tutorialRef           = useRef<HTMLDivElement>(null);
+  const currentPath           = usePathname();
+  const { startTutorial, hasTutorial } = useTutorial(currentPath);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -83,8 +89,19 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // Close tutorial dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (tutorialRef.current && !tutorialRef.current.contains(e.target as Node)) {
+        setTutorialOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const handleLogout = () => { clearAuth(); router.push('/login'); };
-  const goToSession  = (id: number) => { setIsOpen(false); router.push(`/calibration/${id}`); };
+  const goToSession  = (id: number) => { setIsOpen(false); router.push(`/calibration?review=${id}`); };
 
   const unread = data?.unread_count ?? 0;
 
@@ -158,6 +175,61 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
 
       {/* Right — actions */}
       <div className="flex-1 flex items-center justify-end gap-1 md:gap-2">
+
+        {/* ❓ Tutorial */}
+        {hasTutorial() && (
+          <div className="relative" ref={tutorialRef}>
+            <button
+              onClick={() => setTutorialOpen(v => !v)}
+              className="p-1.5 rounded-md hover-bg transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+              title="Tutorial interactivo"
+            >
+              <HelpCircle size={16} />
+            </button>
+
+            <AnimatePresence>
+              {tutorialOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.95 }}
+                  transition={{ duration: 0.12 }}
+                  className="absolute right-0 top-full mt-2 w-56 rounded-lg shadow-xl z-50 overflow-hidden"
+                  style={{ backgroundColor: 'var(--bg-panel)', border: '1px solid var(--border-color)' }}
+                >
+                  <div className="px-3 py-2" style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <p className="text-[11px] font-bold" style={{ color: 'var(--text-main)' }}>Tutorial Interactivo</p>
+                    <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Selecciona el nivel de detalle</p>
+                  </div>
+
+                  <button
+                    onClick={() => { setTutorialOpen(false); setTimeout(() => startTutorial('quick'), 150); }}
+                    className="w-full text-left px-3 py-2.5 hover-bg transition-colors flex items-start gap-2.5"
+                    style={{ borderBottom: '1px solid var(--border-color)' }}
+                  >
+                    <Zap size={14} className="shrink-0 mt-0.5" style={{ color: '#F59E0B' }} />
+                    <div>
+                      <p className="text-[11px] font-semibold" style={{ color: 'var(--text-main)' }}>🚀 Tutorial Rápido</p>
+                      <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Resumen funcional de cada sección</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => { setTutorialOpen(false); setTimeout(() => startTutorial('extended'), 150); }}
+                    className="w-full text-left px-3 py-2.5 hover-bg transition-colors flex items-start gap-2.5"
+                  >
+                    <BookOpen size={14} className="shrink-0 mt-0.5" style={{ color: '#3B82F6' }} />
+                    <div>
+                      <p className="text-[11px] font-semibold" style={{ color: 'var(--text-main)' }}>📚 Tutorial Extendido</p>
+                      <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Explicación metrológica detallada</p>
+                    </div>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
 
         {/* 🌙 Tema */}
         <button onClick={toggleTheme} className="p-1.5 rounded-md hover-bg transition-colors" style={{ color: 'var(--text-muted)' }}>

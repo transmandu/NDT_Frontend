@@ -8,7 +8,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, AlertTriangle, CheckCircle2, MoreHorizontal, PieChart as PieChartIcon, Activity, Zap } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
-const COLORS = { primary: '#FFA526', danger: '#FF1E12', warning: '#FFB812', success: '#10B981', draft: '#9CA3AF' };
+import { C } from '@/lib/colors';
+const COLORS = { primary: C.primary, danger: C.danger, warning: C.warning, success: C.success, draft: C.statusDraft };
 
 export default function DashboardPage() {
   const { data: sessions = [] } = useQuery<any[]>({
@@ -337,8 +338,8 @@ function ActivityRow({ id, inst, date, status, color, rawId }: { id: string; ins
                 className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-[#1E232B] border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-[60] flex flex-col py-1"
               >
                 <p className="px-3 py-1.5 text-[9px] uppercase font-semibold border-b border-gray-100 dark:border-gray-800" style={{ color: 'var(--text-muted)' }}>Opciones de Trámite</p>
-                <Link href={`/calibration/${rawId}`} className="px-3 py-2 text-xs text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors" style={{ color: 'var(--text-main)' }}>
-                  Visualizar Expendiente...
+                <Link href={`/calibration?review=${rawId}`} className="px-3 py-2 text-xs text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors" style={{ color: 'var(--text-main)' }}>
+                  Visualizar Expediente...
                 </Link>
                 <button className="px-3 py-2 text-xs text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-red-500 font-medium">
                   Anular y Borrar
