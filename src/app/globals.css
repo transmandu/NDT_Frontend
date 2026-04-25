@@ -145,8 +145,10 @@
 
 /* ════════════════════════════════════════════════════════════
    Driver.js — Popover overrides
-   Must live OUTSIDE @layer so they beat the driver.css bundle.
+   Import the base CSS here, OUTSIDE @layer, so it loads first,
+   then we immediately override it below.
    ════════════════════════════════════════════════════════════ */
+@import "driver.js/dist/driver.css";
 
 /* Popover container */
 .driver-popover {
@@ -211,6 +213,8 @@
   cursor: pointer !important;
   line-height: 1 !important;
   text-shadow: none !important;
+  -webkit-text-stroke: 0 !important;
+  text-stroke: 0 !important;
   -webkit-font-smoothing: antialiased !important;
 }
 
