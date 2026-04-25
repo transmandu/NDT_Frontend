@@ -2,7 +2,6 @@
 
 import { useCallback, useRef } from 'react';
 import { driver, type DriveStep, type Config } from 'driver.js';
-import 'driver.js/dist/driver.css';
 import { resolvePageKey, getStepsForPage } from './index';
 import type { TutorialMode, TutorialStep } from './types';
 
