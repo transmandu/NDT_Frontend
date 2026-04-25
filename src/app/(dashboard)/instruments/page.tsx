@@ -110,6 +110,7 @@ function buildColumns(
     {
       accessorKey: 'internal_code',
       header: 'Código',
+      meta: { tourId: 'tour-inst-col-code' },
       enableColumnFilter: false,
       cell: ({ getValue }) => (
         <span className="font-mono font-bold text-[11px]" style={{ color: COLORS.primary }}>{getValue<string>()}</span>
@@ -147,6 +148,7 @@ function buildColumns(
     {
       id: 'range',
       header: 'Rango & Res.',
+      meta: { tourId: 'tour-inst-col-range' },
       enableSorting: false,
       enableColumnFilter: false,
       cell: ({ row }) => {
@@ -162,6 +164,7 @@ function buildColumns(
     {
       accessorKey: 'status',
       header: 'Estado',
+      meta: { tourId: 'tour-inst-col-emp' },
       enableColumnFilter: true, // select filter
       cell: ({ getValue }) => {
         const sc = statusMap[getValue<string>()] ?? statusMap.inactive;
@@ -235,6 +238,7 @@ export default function InstrumentsPage() {
           columns={columns}
           data={instruments}
           searchPlaceholder="Buscar por código, nombre o marca…"
+          searchId="tour-inst-search"
           toolbarRight={
             <button
               id="tour-inst-add-btn"

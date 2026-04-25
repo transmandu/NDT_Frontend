@@ -149,12 +149,14 @@ function buildColumns(onEdit: (s: Standard) => void, onDelete: (s: Standard) => 
     {
       accessorKey: 'certificate_number',
       header: 'Certificado',
+      meta: { tourId: 'tour-std-col-cert' },
       enableColumnFilter: false,
       cell: ({ getValue }) => <span className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>{getValue<string>()}</span>,
     },
     {
       id: 'uncertainty',
       header: 'U (k)',
+      meta: { tourId: 'tour-std-col-uncertainty' },
       enableColumnFilter: false,
       enableSorting: true,
       accessorFn: row => Number(row.uncertainty_u),
@@ -167,12 +169,14 @@ function buildColumns(onEdit: (s: Standard) => void, onDelete: (s: Standard) => 
     {
       accessorKey: 'expiry_date',
       header: 'Vencimiento',
+      meta: { tourId: 'tour-std-col-expiry' },
       enableColumnFilter: false,
       cell: ({ getValue }) => <span className="text-[10px] whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>{new Date(getValue<string>()).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}</span>,
     },
     {
       id: 'status',
       header: 'Estado',
+      meta: { tourId: 'tour-std-col-kfactor' },
       enableColumnFilter: true,
       enableSorting: false,
       accessorFn: row => {
@@ -250,6 +254,7 @@ export default function StandardsPage() {
           columns={columns}
           data={standards}
           searchPlaceholder="Buscar por código, nombre o certificado…"
+          searchId="tour-std-search"
           toolbarRight={
             <button
               id="tour-std-add-btn"

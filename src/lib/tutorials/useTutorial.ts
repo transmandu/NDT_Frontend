@@ -6,6 +6,15 @@ import 'driver.js/dist/driver.css';
 import { resolvePageKey, getStepsForPage } from './index';
 import type { TutorialMode, TutorialStep } from './types';
 
+/** Convert basic markdown to HTML for Driver.js (which renders HTML, not markdown) */
+function mdToHtml(text: string): string {
+  return text
+    // **bold** → <strong>bold</strong>
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    // Line breaks → <br>
+    .replace(/\n/g, '<br>');
+}
+
 /** Convert our steps to Driver.js steps based on mode */
 function toDriverSteps(steps: TutorialStep[], mode: TutorialMode): DriveStep[] {
   return steps
@@ -16,9 +25,9 @@ function toDriverSteps(steps: TutorialStep[], mode: TutorialMode): DriveStep[] {
     .map((s) => ({
       element: s.element,
       popover: {
-        title: mode === 'quick' ? s.quick.title : s.extended.title,
-        description: mode === 'quick' ? s.quick.description : s.extended.description,
-        side: s.side || 'bottom',
+        title:       mode === 'quick' ? s.quick.title       : s.extended.title,
+        description: mdToHtml(mode === 'quick' ? s.quick.description : s.extended.description),
+        side:  s.side  || 'bottom',
         align: s.align || 'start',
       },
     }));
