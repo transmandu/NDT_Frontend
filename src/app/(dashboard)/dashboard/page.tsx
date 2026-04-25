@@ -75,10 +75,10 @@ export default function DashboardPage() {
   ].filter(item => item.value > 0);
 
   return (
-    <div className="w-full flex flex-col gap-4 animate-fadeIn">
+    <div id="tour-dashboard-welcome" className="w-full flex flex-col gap-4 animate-fadeIn">
       
       {/* Administrative Compact Metrics Ribbon */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div id="tour-dashboard-kpis" className="flex flex-wrap items-center gap-3">
         <CompactMetric label="Total Calibraciones" value={sessions.length} />
         <div className="h-4 w-px bg-gray-300 dark:bg-gray-700 mx-2 hidden sm:block" />
         <CompactMetric label="Pendientes" value={stats.pending} icon={<Clock size={12} className="text-orange-500" />} />
@@ -224,7 +224,7 @@ export default function DashboardPage() {
 
       {/* Bottom Row: Recent Activity Table */}
       <div className="w-full lg:w-[65%]">
-        <div id="tour-recent-activity" className="panel rounded-md shadow-sm overflow-hidden flex flex-col min-h-[280px] w-full">
+        <div id="tour-dashboard-recent" className="panel rounded-md shadow-sm overflow-hidden flex flex-col min-h-[280px] w-full">
           <div className="px-4 py-3 flex justify-between items-center bg-[var(--bg-panel)] shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
             <div>
               <h3 className="text-xs font-semibold" style={{ color: 'var(--text-main)' }}>Seguimiento Administrativo</h3>

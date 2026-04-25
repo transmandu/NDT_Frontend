@@ -20,13 +20,13 @@ export default function AuditLogPage() {
 
   return (
     <div className="space-y-3 w-full animate-fadeIn">
-      <div className="flex items-center input-theme rounded px-2 py-1 w-full sm:w-64 shadow-sm" style={{ border: '1px solid var(--border-color)' }}>
+      <div id="tour-audit-filters" className="flex items-center input-theme rounded px-2 py-1 w-full sm:w-64 shadow-sm" style={{ border: '1px solid var(--border-color)' }}>
         <Search size={12} className="mr-1.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
         <input type="text" placeholder="Buscar en bitácora..." value={search} onChange={e => setSearch(e.target.value)}
           className="bg-transparent border-none outline-none text-[11px] w-full" style={{ color: 'var(--text-main)' }} />
       </div>
 
-      <div className="panel rounded-md shadow-sm overflow-x-auto w-full">
+      <div id="tour-audit-table" className="panel rounded-md shadow-sm overflow-x-auto w-full">
         <table className="w-full text-left text-xs min-w-[600px]">
           <thead>
             <tr>

@@ -64,12 +64,12 @@ export const instrumentsSteps: TutorialStep[] = [
   {
     element: '#tour-inst-col-emp',
     quick: {
-      title: '⚠️ EMP (Error Máximo Permitido)',
-      description: 'Límite de error aceptable para que el instrumento sea considerado "conforme".',
+      title: '🟢 Estado Operativo',
+      description: 'Indica si el instrumento está activo, inactivo o en proceso de calibración.',
     },
     extended: {
-      title: '⚠️ EMP — Error Máximo Permitido',
-      description: 'El EMP (o MPE en inglés) es el límite de error que el fabricante declara para este instrumento. Es crucial para la **regla de decisión** (ISO 17025 §7.8.6):\n\n**|E| + U ≤ EMP**\n\n• **|E|**: Valor absoluto del error medido\n• **U**: Incertidumbre expandida (k=2, 95% confianza)\n• **EMP**: Error Máximo Permitido\n\nSi la suma del error más la incertidumbre supera el EMP, el instrumento **NO CUMPLE** y debería ser ajustado, reparado o retirado de servicio.\n\nEjemplo: Si un vernier tiene EMP = 0.03 mm, error = 0.01 mm y U = 0.015 mm → |0.01| + 0.015 = 0.025 ≤ 0.03 → ✓ CONFORME',
+      title: '🟢 Estado y Conformidad — ISO 17025 §6.4',
+      description: 'El estado operativo del instrumento determina si puede ser usado en calibraciones:\n\n• **Operativo**: El instrumento está calibrado y disponible para uso\n• **Inactivo**: Fuera de servicio (reparación, baja definitiva)\n• **En Calibración**: Temporalmente fuera de uso mientras se procesa su calibración\n\nEl EMP de cada instrumento (Error Máximo Permitido) se registra al crear la ficha. Se usa en la regla de decisión: **|Error| + U ≤ EMP**. Si esta condición no se cumple, el estado debería cambiar a "En Calibración" o "Inactivo".',
     },
     side: 'left',
   },

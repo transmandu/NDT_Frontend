@@ -142,3 +142,108 @@
   .animate-fadeIn { animation: fadeIn 0.2s ease-out; }
   .animate-slideIn { animation: slideIn 0.15s ease-out; }
 }
+
+/* ════════════════════════════════════════════════════════════
+   Driver.js — Popover overrides
+   Must live OUTSIDE @layer so they beat the driver.css bundle.
+   ════════════════════════════════════════════════════════════ */
+
+/* Popover container */
+.driver-popover {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+  border-radius: 10px !important;
+  padding: 18px 20px 14px !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.35) !important;
+  max-width: 360px !important;
+}
+
+/* Title */
+.driver-popover-title {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  line-height: 1.4 !important;
+  margin-bottom: 8px !important;
+}
+
+/* Description — supports HTML rendered from markdown */
+.driver-popover-description {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+  font-size: 11.5px !important;
+  font-weight: 400 !important;
+  line-height: 1.65 !important;
+  opacity: 0.92 !important;
+}
+
+/* Bold text inside description */
+.driver-popover-description strong {
+  font-weight: 600 !important;
+  opacity: 1 !important;
+}
+
+/* Footer (progress + buttons row) */
+.driver-popover-footer {
+  margin-top: 14px !important;
+  padding-top: 12px !important;
+  gap: 6px !important;
+}
+
+/* Progress text */
+.driver-popover-progress-text {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  opacity: 0.6 !important;
+}
+
+/* ALL buttons — reset to Inter, normal weight */
+.driver-popover-footer button,
+.driver-popover-prev-btn,
+.driver-popover-next-btn,
+.driver-popover-close-btn {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 6px 14px !important;
+  height: 30px !important;
+  cursor: pointer !important;
+  line-height: 1 !important;
+  text-shadow: none !important;
+  -webkit-font-smoothing: antialiased !important;
+}
+
+/* ← Anterior (secondary / ghost) */
+.driver-popover-prev-btn {
+  background: transparent !important;
+  color: rgba(255,255,255,0.75) !important;
+  border: 1px solid rgba(255,255,255,0.2) !important;
+}
+.driver-popover-prev-btn:hover {
+  background: rgba(255,255,255,0.08) !important;
+  color: #fff !important;
+}
+
+/* Siguiente → / Finalizar (primary) */
+.driver-popover-next-btn {
+  background: #6366F1 !important;
+  color: #fff !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(99,102,241,0.4) !important;
+}
+.driver-popover-next-btn:hover {
+  background: #4f46e5 !important;
+}
+
+/* Close × button */
+.driver-popover-close-btn {
+  font-size: 14px !important;
+  padding: 4px 8px !important;
+  opacity: 0.5 !important;
+  border: none !important;
+  background: transparent !important;
+}
+.driver-popover-close-btn:hover {
+  opacity: 1 !important;
+}

@@ -27,6 +27,8 @@ interface DataTableProps<TData, TValue> {
   searchPlaceholder?: string;
   toolbarRight?: React.ReactNode;
   pageSizeOptions?: number[];
+  /** Optional id attribute for the search input — used by the tutorial system */
+  searchId?: string;
 }
 
 export function DataTable<TData, TValue>({
@@ -35,6 +37,7 @@ export function DataTable<TData, TValue>({
   searchPlaceholder = 'Buscar…',
   toolbarRight,
   pageSizeOptions = [10, 25, 50],
+  searchId,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting]                 = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters]     = React.useState<ColumnFiltersState>([]);
@@ -88,6 +91,7 @@ export function DataTable<TData, TValue>({
           >
             <Search size={12} className="mr-1.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
             <input
+              id={searchId}
               type="text"
               placeholder={searchPlaceholder}
               value={globalFilter}
@@ -153,6 +157,7 @@ export function DataTable<TData, TValue>({
               <tr key={hg.id}>
                 {hg.headers.map(header => (
                   <th key={header.id} colSpan={header.colSpan}
+                    id={(header.column.columnDef.meta as any)?.tourId}
                     className="px-4 py-2.5 th-theme text-[11px] whitespace-nowrap select-none"
                     style={{ width: header.column.columnDef.size ?? undefined }}>
                     {header.isPlaceholder ? null : (

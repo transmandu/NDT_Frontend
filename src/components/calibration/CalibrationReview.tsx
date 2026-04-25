@@ -183,7 +183,7 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
         </div>
       </div>
 
-      <div className="panel rounded-md shadow-sm p-5 w-full" style={{ borderTop: '4px solid #3b82f6' }}>
+      <div id="tour-center-review" className="panel rounded-md shadow-sm p-5 w-full" style={{ borderTop: '4px solid #3b82f6' }}>
         <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--text-main)' }}>
           Sesión CS-{id}
         </h2>
@@ -286,7 +286,7 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
 
         {/* Auditor Actions */}
         {isAuditor && isPending && (
-          <div className="mt-8 pt-4 flex justify-end gap-3" style={{ borderTop: '1px solid var(--border-color)' }}>
+          <div id="tour-center-actions" className="mt-8 pt-4 flex justify-end gap-3" style={{ borderTop: '1px solid var(--border-color)' }}>
             <button onClick={() => setRejectOpen(true)} disabled={actionLoading}
               className="h-9 px-5 rounded-md text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 transition-colors"
               style={{ color: COLORS.danger, backgroundColor: `${COLORS.danger}10`, border: `1px solid ${COLORS.danger}30` }}>

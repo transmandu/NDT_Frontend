@@ -77,7 +77,7 @@ export default function CalibrationPage() {
   return (
     <div className="space-y-4 w-full animate-fadeIn">
       {/* Tabs */}
-      <div id="tour-cert-tabs" className="flex flex-wrap mb-4 gap-1" style={{ borderBottom: '1px solid var(--border-color)' }}>
+      <div id="tour-center-tabs" className="flex flex-wrap mb-4 gap-1" style={{ borderBottom: '1px solid var(--border-color)' }}>
         {([
           ['pending',  `En Revisión (${pending.length})`],
           ['drafts',   `Borradores (${drafts.length})`],
@@ -93,7 +93,7 @@ export default function CalibrationPage() {
       </div>
 
       {activeTab === 'pending' ? (
-        <div id="tour-data-table" className="panel rounded-md shadow-sm overflow-x-auto w-full">
+        <div id="tour-center-table" className="panel rounded-md shadow-sm overflow-x-auto w-full">
           <table className="w-full text-left text-xs min-w-[600px]">
             <thead>
               <tr>
@@ -221,7 +221,7 @@ export default function CalibrationPage() {
         </div>
       ) : (
         /* ── CERTIFICADOS EMITIDOS ── */
-        <div className="panel rounded-md shadow-sm overflow-x-auto w-full">
+        <div id="tour-center-certs" className="panel rounded-md shadow-sm overflow-x-auto w-full">
           <table className="w-full text-left text-xs min-w-[600px]">
             <thead>
               <tr>

@@ -460,7 +460,7 @@ export default function NewCalibrationPage() {
         <AnimatePresence>
           {matchedSchema && selectedInstrument && !loadingSchema && (
             <motion.div initial={{ opacity: 0, height: 0, marginTop: 0 }} animate={{ opacity: 1, height: 'auto', marginTop: 20 }} exit={{ opacity: 0, height: 0, marginTop: 0 }} className="overflow-hidden">
-              <div className="p-4 rounded-md" style={{ backgroundColor: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
+              <div id="tour-cal-ambient" className="p-4 rounded-md" style={{ backgroundColor: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="text-[12px] font-semibold flex items-center gap-1.5" style={{ color: 'var(--text-main)' }}>
                     <Info size={13} style={{ color: COLORS.primary }} />
@@ -498,7 +498,7 @@ export default function NewCalibrationPage() {
               </div>
 
               {/* ── Static Certificate Fields (ISO 7.8.4) ──────────────── */}
-              <div className="mt-4 p-4 rounded-md" style={{ backgroundColor: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
+              <div id="tour-cal-dates" className="mt-4 p-4 rounded-md" style={{ backgroundColor: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
                 <h4 className="text-[12px] font-semibold flex items-center gap-1.5 mb-4" style={{ color: 'var(--text-main)' }}>
                   <BookOpen size={13} style={{ color: C.accent }} />
                   Fechas &amp; Datos del Certificado
@@ -559,7 +559,7 @@ export default function NewCalibrationPage() {
               </div>
 
               {/* Observaciones del técnico */}
-              <div className="space-y-1 mt-4">
+              <div id="tour-cal-observations" className="space-y-1 mt-4">
                 <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                   Observaciones del Técnico (ISO 7.8.2.j)
                 </label>
@@ -592,7 +592,7 @@ export default function NewCalibrationPage() {
       {/* ══════════════════════════════════════════════════════ */}
       <AnimatePresence>
         {matchedSchema && selectedInstrument && selectedStandard && !loadingSchema && (
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+          <motion.div id="tour-cal-step2" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
             className="panel rounded-md shadow-sm p-5 w-full">
             <h3 className="text-sm font-semibold mb-5 flex items-center gap-2" style={{ color: 'var(--text-main)' }}>
               <StepBadge n={2} />
@@ -640,7 +640,7 @@ export default function NewCalibrationPage() {
                   Guardar Borrador
                 </motion.button>
 
-                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                <motion.button id="tour-cal-submit" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                   onClick={handleSubmit} disabled={submitting || !isStrategyImplemented}
                   className="h-10 px-6 rounded-md text-xs font-semibold text-white shadow-md flex items-center gap-2 transition-colors disabled:opacity-50"
                   style={{ backgroundColor: isStrategyImplemented ? C.accent : '#6b7280' }}>
