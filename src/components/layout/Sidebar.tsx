@@ -30,7 +30,7 @@ export default function Sidebar({ isOpen, onToggle }: { isOpen: boolean; onToggl
       <Link href={href} style={{ textDecoration: 'none' }}>
         <button className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md transition-colors text-xs ${
           isActive
-            ? 'bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400 font-medium'
+            ? 'nav-item-active'
             : 'text-[var(--text-muted)] hover-bg'
         }`}>
           {icon}

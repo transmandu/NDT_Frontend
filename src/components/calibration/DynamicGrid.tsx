@@ -488,7 +488,17 @@ function StandardGrid({ grid, data, onChange, validationErrors }: {
   const curRows = Object.keys(data).length || rowCount;
 
   return (
-    <div className="rounded-md overflow-x-auto w-full" style={{ border: '1px solid var(--border-color)' }}>
+    <div className="flex flex-col gap-2 w-full">
+      {isDynamic && (
+        <div className="flex justify-end">
+          <button onClick={addRow}
+            className="h-7 px-3 rounded text-[10px] font-semibold flex items-center gap-1.5 transition-colors"
+            style={{ border: `1px dashed var(--border-color)`, color: 'var(--text-muted)', backgroundColor: 'var(--bg-hover)' }}>
+            <Plus size={11} style={{ color: ORANGE }} /> Agregar fila
+          </button>
+        </div>
+      )}
+      <div className="rounded-md overflow-x-auto w-full" style={{ border: '1px solid var(--border-color)' }}>
       <table className="w-full text-left text-xs" style={{ minWidth: `${Math.max(columns.length * 90, 500)}px` }}>
         <thead>
           <tr>
@@ -642,21 +652,8 @@ function StandardGrid({ grid, data, onChange, validationErrors }: {
             );
           })()}
         </tbody>
-        {isDynamic && (
-          <tfoot>
-            <tr>
-              <td colSpan={columns.length + 2} className="px-2 py-1.5"
-                style={{ borderTop: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}>
-                <button onClick={addRow}
-                  className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1 rounded transition-colors hover-bg"
-                  style={{ color: 'var(--text-muted)', border: `1px dashed var(--border-color)` }}>
-                  <Plus size={11} style={{ color: ORANGE }} /> Agregar fila
-                </button>
-              </td>
-            </tr>
-          </tfoot>
-        )}
       </table>
+      </div>
     </div>
   );
 }

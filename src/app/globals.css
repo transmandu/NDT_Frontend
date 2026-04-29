@@ -70,6 +70,17 @@
   .input-theme { background-color: var(--input-bg); color: var(--text-main); border: 1px solid var(--border-color); }
   .input-theme:focus { outline: none; border-color: var(--brand-primary); box-shadow: 0 0 0 1px var(--brand-primary); }
 
+  /* Sidebar Active Tab */
+  .nav-item-active {
+    background-color: #f1f5f9; /* Fondo gris claro (slate-100) */
+    color: #030712; 
+    font-weight: 700; 
+  }
+  .theme-dark .nav-item-active {
+    background-color: rgba(249, 115, 22, 0.15); /* Fondo naranja translúcido visible */
+    color: #fb923c; 
+    font-weight: 500; 
+  }
   /* Form field input — used in RHF modal forms */
   .field-input {
     width: 100%;

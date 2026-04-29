@@ -86,52 +86,8 @@ export default function DashboardPage() {
         <CompactMetric label="Patrones por vencer" value={stdWarning + stdExpired} icon={<AlertTriangle size={12} className="text-red-500" />} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         
-        {/* Chart 1: Sessions */}
-        <div className="lg:col-span-1 panel rounded-md shadow-sm overflow-hidden flex flex-col h-[280px]">
-          <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-panel)' }}>
-            <PieChartIcon size={14} style={{ color: 'var(--text-muted)' }} />
-            <h3 className="text-xs font-semibold" style={{ color: 'var(--text-main)' }}>Estado de Sesiones</h3>
-          </div>
-          
-          <div className="flex-1 p-4 flex flex-col justify-center">
-            {sessions.length === 0 ? (
-              <div className="text-center text-[11px] text-gray-500">Sin datos para graficar</div>
-            ) : (
-              <div className="w-full h-full min-h-[160px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={chartData}
-                      cx="50%"
-                      cy="45%"
-                      innerRadius={45}
-                      outerRadius={65}
-                      paddingAngle={4}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      {chartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'var(--bg-panel)', borderColor: 'var(--border-color)', fontSize: '11px', borderRadius: '6px', padding: '4px 8px' }}
-                      itemStyle={{ color: 'var(--text-main)', padding: 0 }}
-                    />
-                    <Legend 
-                      verticalAlign="bottom" 
-                      height={24}
-                      iconType="circle"
-                      wrapperStyle={{ fontSize: '10px', paddingTop: '0px' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </div>
-        </div>
 
         {/* Chart 2: Recent Activity (Bar Chart) */}
         <div className="lg:col-span-1 panel rounded-md shadow-sm overflow-hidden flex flex-col h-[280px]">

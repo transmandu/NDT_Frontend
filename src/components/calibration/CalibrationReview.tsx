@@ -267,7 +267,14 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
                   con los valores reales obtenidos durante la calibración. Cada punto de calibración muestra las
                   ecuaciones aplicadas según la &ldquo;Guide to the Expression of Uncertainty in Measurement&rdquo; (GUM).
                 </p>
-                <AuditMathBreakdown results={allResults} instrumentUnit={session?.instrument?.unit} />
+                <AuditMathBreakdown
+                  results={allResults}
+                  instrumentUnit={
+                    session?.calculated_results?.unit ||
+                    session?.instrument?.unit ||
+                    'mm'
+                  }
+                />
               </div>
 
               {allResults.length > 0 && (
@@ -439,6 +446,16 @@ function RejectModal({ onCancel, onConfirm, loading }: {
 /* ══════════════════════════════════════════════════════════ */
 /*  Results Table                                             */
 /* ══════════════════════════════════════════════════════════ */
+
+/** Format a number to at most 5 significant decimal places, stripping trailing zeros. */
+const f5 = (v: number | string | undefined | null, fallback = '—'): string => {
+  if (v === undefined || v === null || v === '') return fallback;
+  const n = typeof v === 'string' ? parseFloat(v) : v;
+  if (isNaN(n)) return fallback;
+  // toFixed(5) then strip trailing zeros after decimal
+  return parseFloat(n.toFixed(5)).toString();
+};
+
 function ResultsTable({ results, highlight }: { results: any[]; highlight?: boolean }) {
   const funcMap: Record<string, string> = { exterior: 'Exterior', interior: 'Interior', depth: 'Profundidad' };
   const hasFunction = results.some(r => r.function);
@@ -466,11 +483,11 @@ function ResultsTable({ results, highlight }: { results: any[]; highlight?: bool
               transition={{ delay: i * 0.08, duration: 0.8 }}>
               <td className="px-3 py-2 font-mono">{r.nominal_value}</td>
               {hasFunction && <td className="px-3 py-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>{funcMap[r.function] || r.function || '—'}</td>}
-              {hasError    && <td className="px-3 py-2 text-right font-mono">{r.error !== undefined ? r.error : '—'}</td>}
-              <td className="px-3 py-2 text-right font-mono">{r.combined_uncertainty_mm ?? r.combined_uncertainty ?? '—'}</td>
-              <td className="px-3 py-2 text-right font-mono">{r.k_factor}</td>
+              {hasError    && <td className="px-3 py-2 text-right font-mono">{r.error !== undefined ? f5(r.error) : '—'}</td>}
+              <td className="px-3 py-2 text-right font-mono">{f5(r.combined_uncertainty_mm ?? r.combined_uncertainty)}</td>
+              <td className="px-3 py-2 text-right font-mono">{f5(r.k_factor)}</td>
               <td className="px-3 py-2 text-right font-mono font-bold" style={{ color: '#FFA526' }}>
-                ± {r.expanded_uncertainty_mm ?? r.expanded_uncertainty ?? '—'}
+                ± {f5(r.expanded_uncertainty_mm ?? r.expanded_uncertainty)}
               </td>
             </motion.tr>
           ))}
@@ -479,3 +496,4 @@ function ResultsTable({ results, highlight }: { results: any[]; highlight?: bool
     </div>
   );
 }
+

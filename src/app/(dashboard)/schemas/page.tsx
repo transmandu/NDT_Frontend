@@ -5,8 +5,8 @@ import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus, Loader2, MoreHorizontal, Pencil, PowerOff, AlertTriangle,
-  CheckCircle2, XCircle, BookOpen, Cpu,
+  Loader2, MoreHorizontal, PowerOff, AlertTriangle,
+  CheckCircle2, XCircle, BookOpen, Cpu, Power,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
@@ -32,12 +32,11 @@ const CATEGORY_COLORS: Record<string, string> = {
   other:       '#6B7280',
 };
 
-/* ─── Actions dropdown cell ────────────────────────────────── */
 function ActionsCell({
   schema,
-  onEdit,
   onDeactivate,
-}: { schema: ProcedureSchema; onEdit: () => void; onDeactivate: () => void }) {
+  onActivate,
+}: { schema: ProcedureSchema; onDeactivate: () => void; onActivate: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -68,22 +67,19 @@ function ActionsCell({
             className="absolute right-0 top-full mt-1 w-44 rounded-md shadow-xl z-[60] overflow-hidden flex flex-col py-1"
             style={{ backgroundColor: 'var(--bg-panel)', border: '1px solid var(--border-color)' }}
           >
-            <p className="px-3 py-1.5 text-[9px] uppercase font-semibold"
-              style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-color)' }}>
-              Acciones
-            </p>
-            <button
-              onClick={() => { setOpen(false); onEdit(); }}
-              className="px-3 py-2 text-xs flex items-center gap-2 hover-bg transition-colors w-full text-left"
-              style={{ color: 'var(--text-main)' }}>
-              <Pencil size={13} /> Editar Esquema
-            </button>
-            {schema.is_active && (
+            {schema.is_active ? (
               <button
                 onClick={() => { setOpen(false); onDeactivate(); }}
                 className="px-3 py-2 text-xs flex items-center gap-2 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors w-full text-left font-medium"
-                style={{ color: DANGER, borderTop: '1px solid var(--border-color)' }}>
+                style={{ color: DANGER }}>
                 <PowerOff size={13} /> Desactivar
+              </button>
+            ) : (
+              <button
+                onClick={() => { setOpen(false); onActivate(); }}
+                className="px-3 py-2 text-xs flex items-center gap-2 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors w-full text-left font-medium"
+                style={{ color: SUCCESS }}>
+                <Power size={13} /> Activar
               </button>
             )}
           </motion.div>
@@ -96,8 +92,8 @@ function ActionsCell({
 /* ─── Column builder ───────────────────────────────────────── */
 function buildColumns(
   supportedCodes: string[],
-  onEdit: (s: ProcedureSchema) => void,
   onDeactivate: (s: ProcedureSchema) => void,
+  onActivate: (s: ProcedureSchema) => void,
 ): ColumnDef<ProcedureSchema>[] {
   return [
     {
@@ -203,8 +199,8 @@ function buildColumns(
         <div className="flex justify-end">
           <ActionsCell
             schema={row.original}
-            onEdit={() => onEdit(row.original)}
             onDeactivate={() => onDeactivate(row.original)}
+            onActivate={() => onActivate(row.original)}
           />
         </div>
       ),
@@ -264,8 +260,6 @@ function DeactivateConfirm({
 /*  PAGE                                                      */
 /* ══════════════════════════════════════════════════════════ */
 export default function SchemasPage() {
-  const [modalOpen, setModalOpen]         = useState(false);
-  const [editTarget, setEditTarget]       = useState<ProcedureSchema | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<ProcedureSchema | null>(null);
   const qc = useQueryClient();
 
@@ -289,7 +283,7 @@ export default function SchemasPage() {
   /* ─── Deactivate mutation ── */
   const deactivateMut = useMutation({
     mutationFn: (id: number) => api.delete(`/calibration/schemas/${id}`),
-    onSuccess: (_, id) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['schemas'] });
       toast.success('Esquema desactivado correctamente.');
       setDeactivateTarget(null);
@@ -300,11 +294,23 @@ export default function SchemasPage() {
     },
   });
 
+  /* ─── Activate mutation ── */
+  const activateMut = useMutation({
+    mutationFn: (id: number) => api.put(`/calibration/schemas/${id}`, { is_active: true }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['schemas'] });
+      toast.success('Esquema activado correctamente.');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Error al activar el esquema.');
+    },
+  });
+
   /* ─── Columns ── */
   const columns = useMemo(() => buildColumns(
     supportedCodes,
-    s => { setEditTarget(s); setModalOpen(true); },
     s => setDeactivateTarget(s),
+    s => activateMut.mutate(s.id),
   ), [supportedCodes]);
 
   return (
@@ -342,28 +348,9 @@ export default function SchemasPage() {
           columns={columns}
           data={schemas}
           searchPlaceholder="Buscar por código, nombre o categoría…"
-          toolbarRight={
-            <button
-              onClick={() => { setEditTarget(null); setModalOpen(true); }}
-              className="h-7 px-3 text-[11px] rounded font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95 hover:opacity-90 whitespace-nowrap text-white"
-              style={{ backgroundColor: ACCENT }}
-            >
-              <Plus size={13} /> Nuevo Esquema
-            </button>
-          }
         />
       )}
 
-      {/* ── Modals ── */}
-      <AnimatePresence>
-        {modalOpen && (
-          <SchemaModal
-            schema={editTarget}
-            supportedCodes={supportedCodes}
-            onClose={() => { setModalOpen(false); setEditTarget(null); }}
-          />
-        )}
-      </AnimatePresence>
       <AnimatePresence>
         {deactivateTarget && (
           <DeactivateConfirm
