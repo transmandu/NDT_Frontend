@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/api';
@@ -44,6 +44,8 @@ export default function NewCalibrationPage() {
   const searchParams = useSearchParams();
   const [selectedInstrument, setSelectedInstrument] = useState(searchParams.get('instrument_id') || '');
   const [selectedStandard, setSelectedStandard] = useState('');
+  // M-LAB-01 (Termohigrómetro) requiere un segundo patrón independiente para HR
+  const [selectedStandard2, setSelectedStandard2] = useState('');
 
   // ── Environmental / Metadata ──
   const [environmentalData, setEnvironmentalData] = useState<Record<string, string>>({});
@@ -71,6 +73,7 @@ export default function NewCalibrationPage() {
     setTempUncertainty('1.0');
     setCalibrationDate(new Date().toISOString().split('T')[0]);
     setValidationErrors({});
+    setSelectedStandard2('');
   }, [selectedInstrument]);
 
   // Derived selections needed for queries
@@ -192,6 +195,29 @@ export default function NewCalibrationPage() {
           }
           return result;
         });
+      } else if (grid.type === 'custom_function_grid') {
+        // EL-001 Multímetro: convierte number_array de CSV → float[], select/string → string, number → float
+        payload[grid.id] = rows.map(rIdx => {
+          const row = gridData[rIdx];
+          const result: Record<string, any> = {};
+          for (const col of grid.columns) {
+            if (col.computed || !row[col.key]) continue;
+            if (col.type === 'number_array') {
+              const vals = String(row[col.key])
+                .split(',')
+                .map((v: string) => parseFloat(v.trim()))
+                .filter((n: number) => !isNaN(n));
+              if (vals.length > 0) result[col.key] = vals;
+            } else if (col.type === 'number') {
+              const n = parseFloat(row[col.key]);
+              if (!isNaN(n)) result[col.key] = n;
+            } else {
+              // select, string, etc.
+              result[col.key] = row[col.key];
+            }
+          }
+          return result;
+        }).filter((p: Record<string, any>) => Object.keys(p).length > 0);
       } else {
         // Generic: pass raw data
         payload[grid.id] = rows.map(rIdx => {
@@ -208,12 +234,17 @@ export default function NewCalibrationPage() {
     }
 
     return payload;
-  }, [gridDataMap, grids, selectedInst, selectedStd, environmentalData]);
+  }, [gridDataMap, grids, selectedInst, selectedStd, environmentalData, calibrationDate, nextCalibrationDate, technicianObservation, tempUncertainty]);
 
   // ─── Validate required fields ───
   const validateFields = useCallback((): boolean => {
     if (!selectedInstrument) { toast.error('Seleccione un instrumento'); return false; }
     if (!selectedStandard) { toast.error('Seleccione un patrón de referencia'); return false; }
+    // M-LAB-01: segundo patrón (Humedad Relativa) es obligatorio
+    if (procedureCode === 'M-LAB-01' && !selectedStandard2) {
+      toast.error('M-LAB-01 requiere un segundo patrón de Humedad Relativa');
+      return false;
+    }
     if (!nextCalibrationDate) { toast.error('Indique la fecha de próxima calibración'); return false; }
 
     // Validate environmental requirements
@@ -263,7 +294,7 @@ export default function NewCalibrationPage() {
     }
 
     return true;
-  }, [selectedInstrument, selectedStandard, environmentalData, matchedSchema, grids, gridDataMap]);
+  }, [selectedInstrument, selectedStandard, environmentalData, matchedSchema, grids, gridDataMap, nextCalibrationDate, calibrationDate]);
 
   // ─── Save as draft ───  
   const handleSaveDraft = async () => {
@@ -284,7 +315,10 @@ export default function NewCalibrationPage() {
         ambient_humidity: parseFloat(environmentalData.humidity || '50'),
         ambient_pressure: environmentalData.ambient_pressure ? parseFloat(environmentalData.ambient_pressure) : null,
         observation: technicianObservation || null,
-        standard_ids: [parseInt(selectedStandard)],
+        standard_ids: [
+          parseInt(selectedStandard),
+          ...(procedureCode === 'M-LAB-01' && selectedStandard2 ? [parseInt(selectedStandard2)] : []),
+        ],
         calibration_date: calibrationDate || new Date().toISOString().split('T')[0],
         next_calibration_date: nextCalibrationDate || null,
       });
@@ -328,7 +362,10 @@ export default function NewCalibrationPage() {
         ambient_humidity: parseFloat(environmentalData.humidity || '50'),
         ambient_pressure: environmentalData.ambient_pressure ? parseFloat(environmentalData.ambient_pressure) : null,
         observation: technicianObservation || null,
-        standard_ids: [parseInt(selectedStandard)],
+        standard_ids: [
+          parseInt(selectedStandard),
+          ...(procedureCode === 'M-LAB-01' && selectedStandard2 ? [parseInt(selectedStandard2)] : []),
+        ],
         calibration_date: calibrationDate || new Date().toISOString().split('T')[0],
         next_calibration_date: nextCalibrationDate || null,
       });
@@ -351,6 +388,65 @@ export default function NewCalibrationPage() {
     }
   };
 
+  // ─── Dynamic step definitions (one per grid table) ───
+  const steps = useMemo(() => {
+    const s: { id: string; label: string; gridStep?: boolean }[] = [
+      { id: 'cal-section-step1', label: 'Identificación del Ensayo' },
+    ];
+    if (grids.length > 0) {
+      grids.forEach((grid: GridSchema) => {
+        s.push({ id: `cal-section-grid-${grid.id}`, label: grid.title, gridStep: true });
+      });
+    } else {
+      s.push({ id: 'cal-section-step2', label: 'Registro de Mediciones' });
+    }
+    s.push({ id: 'cal-section-step3', label: 'Resultado GUM' });
+    return s;
+  }, [grids]);
+
+  // ─── Scroll spy via IntersectionObserver (no scroll-container dependency) ───
+  const [activeStep, setActiveStep] = useState(0);
+  useEffect(() => {
+    // Use a map so the last intersecting element wins based on order
+    const visibleSet = new Set<string>();
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) visibleSet.add(entry.target.id);
+          else visibleSet.delete(entry.target.id);
+        });
+        // Find the lowest-index step that is currently visible
+        let current = 0;
+        steps.forEach((step, idx) => {
+          if (visibleSet.has(step.id)) current = idx;
+        });
+        setActiveStep(current);
+      },
+      { threshold: 0.05, rootMargin: '0px 0px -70% 0px' }
+    );
+
+    // Small delay so AnimatePresence elements have time to mount
+    const timer = setTimeout(() => {
+      steps.forEach(step => {
+        const el = document.getElementById(step.id);
+        if (el) observer.observe(el);
+      });
+    }, 200);
+
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [steps, budgetResult]);
+
+  // ─── Scroll to section (native, no scroll-container lookup needed) ───
+  const scrollToStep = (stepId: string) => {
+    const el = document.getElementById(stepId);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   // ─── Loading state ───
   if (loading) {
     return (
@@ -362,12 +458,90 @@ export default function NewCalibrationPage() {
   }
 
   return (
-    <div className="w-full space-y-5 animate-fadeIn max-w-[1400px] mx-auto">
+    <div className="w-full animate-fadeIn">
+
+      {/* ══ STEP PROGRESS BAR — flush to top of content area ══ */}
+      <div
+        className="sticky top-0 z-30 -mt-4 md:-mt-6 -mx-4 md:-mx-6 mb-5"
+        style={{
+          backgroundColor: 'var(--bg-panel)',
+          borderBottom: '1px solid var(--border-color)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
+        }}
+      >
+        <div className="flex items-center h-10 px-2 w-full">
+          {steps.map((step, idx) => {
+            const isActive = activeStep === idx;
+            const isDone = activeStep > idx;
+            const isResultStep = idx === steps.length - 1;
+            const isGridStep = !!(step as any).gridStep;
+            const isAvailable =
+              idx === 0 ||
+              (isGridStep && !!matchedSchema && !!selectedInstrument && !!selectedStandard) ||
+              (!isGridStep && !isResultStep && !!matchedSchema && !!selectedInstrument && !!selectedStandard) ||
+              (isResultStep && !!budgetResult);
+            return (
+              <div key={step.id} className="flex items-center flex-1 min-w-0">
+                <button
+                  onClick={() => isAvailable && scrollToStep(step.id)}
+                  disabled={!isAvailable}
+                  title={step.label}
+                  className="flex items-center justify-center gap-1.5 px-1 py-1 rounded-sm transition-all disabled:cursor-default w-full min-w-0"
+                  style={{ opacity: isAvailable ? 1 : 0.3 }}
+                >
+                  <span
+                    className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0"
+                    style={{
+                      backgroundColor: isActive ? 'var(--brand-accent2)' : isDone ? 'var(--brand-success)' : 'var(--border-color)',
+                      color: isActive || isDone ? '#fff' : 'var(--text-muted)',
+                      transition: 'background-color 0.3s',
+                    }}
+                  >
+                    {isDone ? '✓' : idx + 1}
+                  </span>
+                  <span
+                    className="text-[10px] truncate"
+                    style={{
+                      color: isActive ? 'var(--brand-accent2)' : isDone ? 'var(--brand-success)' : 'var(--text-muted)',
+                      fontWeight: isActive ? 700 : 500,
+                      transition: 'color 0.3s',
+                    }}
+                  >
+                    {step.label}
+                  </span>
+                </button>
+                {idx < steps.length - 1 && (
+                  <span
+                    className="shrink-0 text-[10px] px-0.5"
+                    style={{ color: isDone ? 'var(--brand-success)' : 'var(--border-color)', opacity: 0.6 }}
+                  >
+                    ›
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {/* Thin progress bar at the very bottom of the step bar */}
+        <div className="h-[2px]" style={{ backgroundColor: 'var(--border-color)' }}>
+          <div
+            style={{
+              height: '100%',
+              width: `${((activeStep + 1) / steps.length) * 100}%`,
+              backgroundColor: 'var(--brand-accent2)',
+              transition: 'width 0.5s ease',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* ── Content area with standard spacing ── */}
+      <div className="space-y-5 max-w-[1400px] mx-auto">
 
       {/* ══════════════════════════════════════════════════════ */}
       {/* ═══ PASO 1: SELECCIÓN + CONDICIONES AMBIENTALES ═══  */}
       {/* ══════════════════════════════════════════════════════ */}
-      <div id="tour-cal-step1" className="panel rounded-md shadow-sm p-5 w-full">
+      <div id="cal-section-step1" className="panel rounded-md shadow-sm p-5 w-full">
         <h3 className="text-sm font-semibold mb-5 flex items-center gap-2" style={{ color: 'var(--text-main)' }}>
           <StepBadge n={1} />
           Identificación del Ensayo
@@ -434,6 +608,37 @@ export default function NewCalibrationPage() {
           </div>
         </div>
 
+        {/* ── M-LAB-01: Segundo patrón de Humedad Relativa ── */}
+        {procedureCode === 'M-LAB-01' && (
+          <div className="mt-3 p-3 rounded-md" style={{ backgroundColor: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+              M-LAB-01 — Segundo Patrón: Humedad Relativa
+            </p>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                Patrón Humedad Relativa <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={selectedStandard2}
+                onChange={e => setSelectedStandard2(e.target.value)}
+                className="w-full h-9 px-3 rounded input-theme text-xs"
+              >
+                <option value="">— Seleccione Patrón de HR —</option>
+                {standards
+                  .filter((s: Standard) => String(s.id) !== selectedStandard)
+                  .map((s: Standard) => (
+                    <option key={s.id} value={s.id}>
+                      {s.internal_code} — {s.name} (U={s.uncertainty_u}, k={s.k_factor})
+                    </option>
+                  ))}
+              </select>
+              <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                Patrón independiente para humedad relativa (std[1] → u_HR_cert/k). ISO 17025 §6.4.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Instrument Info Card */}
         <AnimatePresence>
           {selectedInst && (
@@ -472,28 +677,79 @@ export default function NewCalibrationPage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {(matchedSchema.ui_schema?.metadata_requirements || []).map((req: any, idx: number) => (
+                  {(matchedSchema.ui_schema?.metadata_requirements || []).map((req: any, idx: number) => {
+                    const isBool    = req.type === 'boolean' || req.type === 'checkbox';
+                    const isSelect  = req.type === 'select';
+                    const isNumber  = req.type === 'number';
+                    const fieldVal  = environmentalData[req.field] ?? '';
+                    const setField  = (v: string) => setEnvironmentalData({ ...environmentalData, [req.field]: v });
+
+                    return (
                     <div key={idx} className="space-y-1">
                       <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                         {req.label} {req.required && <span className="text-red-500">*</span>}
                       </label>
-                      <div className="relative">
-                        <input type={req.type === 'number' ? 'number' : 'text'}
-                          value={environmentalData[req.field] || ''}
-                          onChange={e => setEnvironmentalData({ ...environmentalData, [req.field]: e.target.value })}
-                          placeholder={req.default?.toString() || ''}
-                          min={req.min} max={req.max}
-                          step={req.type === 'number' ? 'any' : undefined}
-                          className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono pr-10" />
-                        {req.unit && (
-                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-medium opacity-40">{req.unit}</span>
-                        )}
-                      </div>
-                      {req.min !== undefined && req.max !== undefined && (
+
+                      {/* ── Boolean / Checkbox → Sí / No dropdown ── */}
+                      {isBool && (
+                        <select
+                          value={fieldVal}
+                          onChange={e => setField(e.target.value)}
+                          className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono"
+                          style={{ color: fieldVal === 'true' ? 'var(--brand-success)' : fieldVal === 'false' ? '#ef4444' : 'var(--text-muted)' }}
+                        >
+                          <option value="">— Seleccione —</option>
+                          <option value="true">✔ Sí</option>
+                          <option value="false">✘ No</option>
+                        </select>
+                      )}
+
+                      {/* ── Select → options from schema ── */}
+                      {isSelect && (
+                        <select
+                          value={fieldVal || req.default || ''}
+                          onChange={e => setField(e.target.value)}
+                          className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono"
+                        >
+                          <option value="">— Seleccione —</option>
+                          {(req.options || []).map((opt: string) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {/* ── Number / Text → input ── */}
+                      {!isBool && !isSelect && (
+                        <div className="relative">
+                          <input
+                            type={isNumber ? 'number' : 'text'}
+                            value={fieldVal}
+                            onChange={e => setField(e.target.value)}
+                            placeholder={req.default?.toString() || ''}
+                            min={req.min} max={req.max}
+                            step={isNumber ? 'any' : undefined}
+                            className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono pr-10"
+                          />
+                          {req.unit && (
+                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-medium opacity-40">{req.unit}</span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* ── Range hint (only for numbers) ── */}
+                      {isNumber && req.min !== undefined && req.max !== undefined && (
                         <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Rango: {req.min} – {req.max}</span>
                       )}
+
+                      {/* ── Tooltip hint ── */}
+                      {req.tooltip && (
+                        <span className="text-[9px] leading-tight" style={{ color: 'var(--text-muted)' }} title={req.tooltip}>
+                          {req.tooltip.length > 60 ? req.tooltip.slice(0, 57) + '…' : req.tooltip}
+                        </span>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -592,7 +848,7 @@ export default function NewCalibrationPage() {
       {/* ══════════════════════════════════════════════════════ */}
       <AnimatePresence>
         {matchedSchema && selectedInstrument && selectedStandard && !loadingSchema && (
-          <motion.div id="tour-cal-step2" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+          <motion.div id="cal-section-step2" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
             className="panel rounded-md shadow-sm p-5 w-full">
             <h3 className="text-sm font-semibold mb-5 flex items-center gap-2" style={{ color: 'var(--text-main)' }}>
               <StepBadge n={2} />
@@ -609,23 +865,24 @@ export default function NewCalibrationPage() {
               </div>
             )}
 
-            {/* Render each grid from JSON Schema */}
+            {/* Render each grid from JSON Schema — each gets its own scroll anchor */}
             <div className="space-y-8">
               {grids.map((grid: GridSchema, gIdx: number) => (
-                <DynamicGrid
-                  key={grid.id}
-                  grid={grid}
-                  gridIndex={gIdx}
-                  data={gridDataMap[grid.id] || {}}
-                  onChange={handleGridChange}
-                  validationErrors={validationErrors[grid.id]}
-                  instrumentInfo={selectedInst ? {
-                    resolution: selectedInst.resolution,
-                    unit: selectedInst.unit,
-                    range_min: selectedInst.range_min,
-                    range_max: selectedInst.range_max,
-                  } : undefined}
-                />
+                <div key={grid.id} id={`cal-section-grid-${grid.id}`}>
+                  <DynamicGrid
+                    grid={grid}
+                    gridIndex={gIdx}
+                    data={gridDataMap[grid.id] || {}}
+                    onChange={handleGridChange}
+                    validationErrors={validationErrors[grid.id]}
+                    instrumentInfo={selectedInst ? {
+                      resolution: selectedInst.resolution,
+                      unit: selectedInst.unit,
+                      range_min: selectedInst.range_min,
+                      range_max: selectedInst.range_max,
+                    } : undefined}
+                  />
+                </div>
               ))}
             </div>
 
@@ -658,7 +915,7 @@ export default function NewCalibrationPage() {
       {/* ══════════════════════════════════════════════════════ */}
       <AnimatePresence>
         {budgetResult && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
+          <motion.div id="cal-section-step3" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
             className="panel rounded-md shadow-sm w-full overflow-hidden" style={{ borderLeft: `4px solid ${COLORS.success}` }}>
             <div className="p-5">
               <h3 className="text-sm font-semibold mb-1 flex items-center gap-2" style={{ color: COLORS.success }}>
@@ -678,7 +935,7 @@ export default function NewCalibrationPage() {
               />
 
               {/* Traceability accordion */}
-              <TraceabilityAccordion />
+              <TraceabilityAccordion procedureCode={procedureCode} />
 
               {/* Final actions */}
               <div className="mt-6 pt-4 flex justify-end" style={{ borderTop: '1px solid var(--border-color)' }}>
@@ -692,6 +949,7 @@ export default function NewCalibrationPage() {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 }
@@ -819,7 +1077,7 @@ function UnifiedResultsTable({
                   <td className="px-3 py-2 text-center" style={{ borderRight: bd }}>{typeBadge(src.type)}</td>
                   <td className="px-3 py-2 text-[11px]" style={{ borderRight: bd, color: 'var(--text-muted)' }}>{src.distribution}</td>
                   <td className="px-3 py-2 text-right font-mono font-semibold" style={{ borderRight: bd, color: 'var(--text-main)' }}>
-                    {typeof src.standard_uncertainty === 'number' ? src.standard_uncertainty.toFixed(6) : '—'}
+                    {typeof src.standard_uncertainty === 'number' ? src.standard_uncertainty.toFixed(5) : '—'}
                   </td>
                   <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text-muted)' }}>
                     {src.degrees_of_freedom ?? '∞'}
@@ -839,7 +1097,7 @@ function UnifiedResultsTable({
                   <td className="px-3 py-2" style={{ borderRight: bd }} />
                   <td className="px-3 py-2" style={{ borderRight: bd }} />
                   <td className="px-3 py-2 text-right font-mono font-bold" style={{ borderRight: bd, color: 'var(--text-main)' }}>
-                    {first.combined_uncertainty?.toFixed(6) ?? '—'}
+                    {first.combined_uncertainty?.toFixed(5) ?? '—'}
                   </td>
                   <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text-muted)' }}>—</td>
                 </tr>
@@ -895,7 +1153,7 @@ function UnifiedResultsTable({
                       color: COLORS.primary,
                       backgroundColor: 'rgba(255,165,38,0.06)',
                     }}>
-                    {pt.nominal_value} <span className="text-[9px] font-normal opacity-60">{unit}</span>
+                    {pt.nominal_value} <span className="text-[9px] font-normal opacity-60">{pt.unit ?? unit}</span>
                   </th>
                 ))}
               </tr>
@@ -921,7 +1179,7 @@ function UnifiedResultsTable({
                         <td key={i} className="px-3 py-2.5 text-center font-mono"
                           style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
                           {typeof pt.error === 'number' ? pt.error.toFixed(4) : '0.0000'}
-                          <span className="text-[9px] opacity-50 ml-0.5">{unit}</span>
+                          <span className="text-[9px] opacity-50 ml-0.5">{pt.unit ?? unit}</span>
                         </td>
                       ))}
                     </tr>
@@ -936,7 +1194,7 @@ function UnifiedResultsTable({
                           <td key={i} className="px-3 py-2.5 text-center font-mono"
                             style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
                             {pt.error_descending != null ? Number(pt.error_descending).toFixed(4) : '—'}
-                            <span className="text-[9px] opacity-50 ml-0.5">{unit}</span>
+                            <span className="text-[9px] opacity-50 ml-0.5">{pt.unit ?? unit}</span>
                           </td>
                         ))}
                       </tr>
@@ -952,7 +1210,7 @@ function UnifiedResultsTable({
                           <td key={i} className="px-3 py-2.5 text-center font-mono font-semibold"
                             style={{ borderLeft: i > 0 ? bd : undefined, color: '#D97706' }}>
                             {typeof pt.hysteresis === 'number' ? pt.hysteresis.toFixed(4) : '—'}
-                            <span className="text-[9px] font-normal opacity-60 ml-0.5">{unit}</span>
+                            <span className="text-[9px] font-normal opacity-60 ml-0.5">{pt.unit ?? unit}</span>
                           </td>
                         ))}
                       </tr>
@@ -965,8 +1223,8 @@ function UnifiedResultsTable({
                         {points.map((pt: any, i: number) => (
                           <td key={i} className="px-3 py-2.5 text-center font-mono"
                             style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
-                            {pt.combined_uncertainty?.toFixed(6) ?? '—'}
-                            <span className="text-[9px] opacity-50 ml-0.5">{unit}</span>
+                            {pt.combined_uncertainty?.toFixed(5) ?? '—'}
+                            <span className="text-[9px] opacity-50 ml-0.5">{pt.unit ?? unit}</span>
                           </td>
                         ))}
                       </tr>
@@ -995,7 +1253,7 @@ function UnifiedResultsTable({
                           <td key={i} className="px-3 py-2.5 text-center font-mono font-bold"
                             style={{ borderLeft: i > 0 ? `1px solid ${COLORS.primary}40` : undefined, color: COLORS.primary }}>
                             ± {pt.expanded_uncertainty?.toFixed(4) ?? '—'}
-                            <span className="text-[10px] font-normal opacity-60 ml-0.5">{unit}</span>
+                            <span className="text-[10px] font-normal opacity-60 ml-0.5">{pt.unit ?? unit}</span>
                           </td>
                         ))}
                       </tr>
@@ -1205,25 +1463,131 @@ function VernierFunctionTable({ points }: { points: any[] }) {
 
 
 
-function TraceabilityAccordion() {
+/* ─── Formula data per procedure ──────────────────────────── */
+type FEntry = { name: string; expr: React.ReactNode; desc: string };
+type FGroup = { title: string; accent?: string; entries: FEntry[] };
+
+const GUM_COMMON: FGroup[] = [
+  {
+    title: 'Incertidumbre Tipo A',
+    entries: [
+      { name: 'Desviación estándar', expr: <><i>s</i> = √[Σ(<i>x</i><sub>i</sub> − <i>x̄</i>)² / (<i>n</i>−1)]</>, desc: 'xᵢ = lectura i-ésima, x̄ = media aritmética, n = número de lecturas repetidas.' },
+      { name: 'Incertidumbre Tipo A', expr: <><i>u</i><sub>A</sub> = <i>s</i> / √<i>n</i></>, desc: 'Distribución normal. Grados de libertad νₐ = n − 1.' },
+    ],
+  },
+  {
+    title: 'Incertidumbre Tipo B',
+    entries: [
+      { name: 'Resolución del instrumento', expr: <><i>u</i><sub>B1</sub> = <i>a</i> / (2√3)</>, desc: 'Distribución rectangular. a = resolución mínima del instrumento. ν₁ → ∞.' },
+      { name: 'Incertidumbre del patrón', expr: <><i>u</i><sub>B2</sub> = <i>U</i><sub>p</sub> / <i>k</i></>, desc: 'U_p y k tomados del certificado de calibración. Distribución normal. ν₂ → ∞.' },
+    ],
+  },
+  {
+    title: 'Combinada · Welch-Satterthwaite · Expandida',
+    entries: [
+      { name: 'Incertidumbre combinada', expr: <><i>u</i><sub>c</sub> = √(<i>u</i><sub>A</sub>² + <i>u</i><sub>B1</sub>² + <i>u</i><sub>B2</sub>²)</>, desc: 'Suma en cuadratura de todas las componentes de incertidumbre estándar.' },
+      { name: 'Welch-Satterthwaite', expr: <><i>ν</i><sub>eff</sub> = <i>u</i><sub>c</sub>⁴ / Σ(<i>u</i><sub>i</sub>⁴ / <i>ν</i><sub>i</sub>)</>, desc: 'Grados de libertad efectivos. Determina el factor de cobertura k de t-Student.' },
+      { name: 'Incertidumbre expandida', expr: <><i>U</i> = <i>k</i>(<i>ν</i><sub>eff</sub>) × <i>u</i><sub>c</sub></>, desc: 'k de tabla t-Student al 95.45% de probabilidad de cobertura (≈ 2σ).' },
+    ],
+  },
+];
+
+const PROC_FORMULAS: Record<string, FGroup[]> = {
+  'ME-005': [{
+    title: 'Error de Indicación — Balanza de Alta Precisión',
+    accent: C.accent,
+    entries: [
+      { name: 'Error de indicación', expr: <><i>E</i><sub>i</sub> = <i>L</i><sub>i</sub> − <i>P</i><sub>i</sub></>, desc: 'Lᵢ = lectura del instrumento, Pᵢ = valor nominal del patrón en el punto i.' },
+      { name: 'Corrección', expr: <><i>C</i><sub>i</sub> = <i>P</i><sub>i</sub> − <i>L</i><sub>i</sub></>, desc: 'Corrección a aplicar a la lectura para obtener el valor convencionalmente verdadero.' },
+      { name: 'Criterio EMA', expr: <><i>|E</i><sub>i</sub><i>|</i> ≤ EMA</>, desc: 'El error debe ser menor o igual al Error Máximo Admisible según la clase metrológica.' },
+    ],
+  }],
+  'ME-003': [{
+    title: 'Error e Histéresis — Manómetro',
+    accent: C.accent,
+    entries: [
+      { name: 'Error de indicación', expr: <><i>E</i><sub>i</sub> = <i>L</i><sub>i</sub> − <i>P</i><sub>i</sub></>, desc: 'Lᵢ = presión indicada, Pᵢ = presión del patrón en el punto i.' },
+      { name: 'Histéresis', expr: <><i>H</i><sub>i</sub> = |<i>L</i><sub>asc,i</sub> − <i>L</i><sub>desc,i</sub>|</>, desc: 'Diferencia absoluta entre lectura ascendente y descendente en el mismo punto.' },
+      { name: 'Error de clase', expr: <><i>|E</i><sub>i</sub><i>|</i> ≤ <i>f</i> × FE / 100</>, desc: 'f = clase del instrumento (%), FE = fondo de escala. Según EN 837-1.' },
+    ],
+  }],
+  'DIM-001': [{
+    title: 'Error de Medición — Pie de Rey / Vernier',
+    accent: C.accent,
+    entries: [
+      { name: 'Error por función', expr: <><i>E</i><sub>i,j</sub> = <i>L</i><sub>i,j</sub> − <i>V</i><sub>ref,j</sub></>, desc: 'i = punto de calibración, j = función (exterior / interior / profundidad). V_ref = bloque patrón.' },
+      { name: 'Peor caso Tipo A', expr: <><i>s</i><sub>j</sub> = max(<i>s</i><sub>ext</sub>, <i>s</i><sub>int</sub>, <i>s</i><sub>prof</sub>)</>, desc: 'Se usa la mayor desviación estándar entre las tres funciones (criterio conservador GUM).' },
+    ],
+  }],
+  'ISO-6789': [{
+    title: 'Error Relativo — Llave Dinamométrica',
+    accent: C.accent,
+    entries: [
+      { name: 'Error relativo', expr: <><i>e</i><sub>i</sub> = ((<i>L</i><sub>i</sub> − <i>P</i><sub>i</sub>) / <i>P</i><sub>i</sub>) × 100%</>, desc: 'Lᵢ = par indicado por el instrumento, Pᵢ = par del patrón.' },
+      { name: 'Criterio ISO 6789', expr: <><i>|e</i><sub>i</sub><i>|</i> ≤ 4% (T.I) ó ≤ 6% (T.II)</>, desc: 'Tipo I: llave de ajuste. Tipo II: llave de señal fija. Según ISO 6789-1:2017.' },
+    ],
+  }],
+  'EL-001': [{
+    title: 'Error de Indicación — Multímetro Digital',
+    accent: C.accent,
+    entries: [
+      { name: 'Error absoluto', expr: <><i>E</i><sub>i</sub> = <i>L</i><sub>i</sub> − <i>V</i><sub>ref,i</sub></>, desc: 'Lᵢ = lectura del multímetro, V_ref = valor del calibrador de proceso.' },
+      { name: 'Error de especificación', expr: <><i>E</i><sub>esp</sub> = ±(<i>a</i>% · Lect. + <i>b</i> dígitos)</>, desc: 'a y b según hoja de especificaciones del fabricante para el rango y función activos.' },
+    ],
+  }],
+  'M-LAB-01': [{
+    title: 'Error de Indicación — Termohigrómetro',
+    accent: C.accent,
+    entries: [
+      { name: 'Error de temperatura', expr: <><i>E</i><sub>T,i</sub> = <i>T</i><sub>ind,i</sub> − <i>T</i><sub>ref,i</sub></>, desc: 'T_ind = temperatura indicada, T_ref = sensor SPRT / termómetro patrón.' },
+      { name: 'Error de humedad relativa', expr: <><i>E</i><sub>HR,i</sub> = <i>HR</i><sub>ind,i</sub> − <i>HR</i><sub>ref,i</sub></>, desc: 'HR_ind = humedad indicada, HR_ref = generador de humedad / psicrómetro de referencia.' },
+    ],
+  }],
+};
+
+function TraceabilityAccordion({ procedureCode }: { procedureCode: string }) {
   const [open, setOpen] = useState(false);
+  const specific = PROC_FORMULAS[procedureCode] ?? [];
+  const groups = [...specific, ...GUM_COMMON];
+  const total = groups.reduce((a, g) => a + g.entries.length, 0);
   return (
     <div className="rounded-md mt-4" style={{ border: '1px solid var(--border-color)' }}>
       <button onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between p-3 text-xs font-semibold hover-bg transition-colors"
         style={{ color: 'var(--text-muted)' }}>
-        <span className="flex items-center gap-2"><BookOpen size={14} /> Trazabilidad y Fórmulas GUM</span>
-        <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}><ChevronDown size={14} /></motion.div>
+        <span className="flex items-center gap-2">
+          <BookOpen size={14} /> Trazabilidad y Fórmulas GUM
+          <span className="text-[9px] px-1.5 py-0.5 rounded-full font-mono"
+            style={{ backgroundColor: `${C.accent}20`, color: C.accent }}>
+            {total} fórmulas
+          </span>
+        </span>
+        <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
+          <ChevronDown size={14} />
+        </motion.div>
       </button>
       <AnimatePresence>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden" style={{ backgroundColor: 'var(--bg-hover)' }}>
-            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4" style={{ borderTop: '1px solid var(--border-color)' }}>
-              <FormulaCard t="1. Incertidumbre Tipo A" f="u_A = s / √n" d="s = desviación estándar experimental, n = número de lecturas." />
-              <FormulaCard t="2. Incertidumbre Tipo B (Resolución)" f="u_B1 = a / (2 × √3)" d="Distribución rectangular. a = resolución mínima del instrumento." />
-              <FormulaCard t="3. Incertidumbre Tipo B (Patrón)" f="u_B2 = U_patrón / k" d="Distribución normal, k y U del certificado del patrón." />
-              <FormulaCard t="4. Welch-Satterthwaite + Expandida" f="ν_eff = u_c⁴ / Σ(u_i⁴/ν_i)  |  U = k(ν) × u_c" d="Grados de libertad efectivos → k de tabla t-Student al 95.45%." />
+            <div className="p-4 space-y-6" style={{ borderTop: '1px solid var(--border-color)' }}>
+              {groups.map((group, gi) => (
+                <div key={gi}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="h-px flex-1" style={{ backgroundColor: `${group.accent ?? 'var(--border-color)'}50` }} />
+                    <h5 className="text-[9px] uppercase font-bold tracking-widest whitespace-nowrap"
+                      style={{ color: group.accent ?? 'var(--text-muted)' }}>
+                      {group.title}
+                    </h5>
+                    <span className="h-px flex-1" style={{ backgroundColor: `${group.accent ?? 'var(--border-color)'}50` }} />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {group.entries.map((f, fi) => (
+                      <FormulaCard key={fi} name={f.name} expr={f.expr} desc={f.desc} accent={group.accent} />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </motion.div>
         )}
@@ -1232,14 +1596,17 @@ function TraceabilityAccordion() {
   );
 }
 
-function FormulaCard({ t, f, d }: { t: string; f: string; d: string }) {
+function FormulaCard({ name, expr, desc, accent }: { name: string; expr: React.ReactNode; desc: string; accent?: string }) {
   return (
-    <div className="space-y-2">
-      <h5 className="text-[11px] font-bold" style={{ color: 'var(--text-main)' }}>{t}</h5>
-      <div className="p-2 rounded text-center" style={{ backgroundColor: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
-        <p className="font-mono text-xs" style={{ color: 'var(--text-main)' }}>{f}</p>
+    <div className="rounded-md p-3 space-y-2 flex flex-col" style={{ backgroundColor: 'var(--bg-app)', border: `1px solid ${accent ? accent + '30' : 'var(--border-color)'}` }}>
+      <p className="text-[10px] font-semibold leading-snug" style={{ color: 'var(--text-main)' }}>{name}</p>
+      <div className="py-2.5 px-3 rounded text-center flex-1 flex items-center justify-center"
+        style={{ backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-color)' }}>
+        <span className="font-mono text-[12px] italic" style={{ color: accent ?? 'var(--text-main)', letterSpacing: '0.01em' }}>
+          {expr}
+        </span>
       </div>
-      <p className="text-[10px] leading-tight" style={{ color: 'var(--text-muted)' }}>{d}</p>
+      <p className="text-[9px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>{desc}</p>
     </div>
   );
 }
