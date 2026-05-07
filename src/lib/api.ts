@@ -1,34 +1,28 @@
 import axios from 'axios';
+import { useAuthStore } from '@/stores/authStore';
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api',
   headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
   timeout: 30000,
 });
 
-// Interceptor: agrega token Bearer a cada petición
+// Interceptor: agrega token Bearer a cada petición leyendo el store directamente
+// (evita JSON.parse de localStorage en cada request)
 api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const authStorage = localStorage.getItem('auth-storage');
-    if (authStorage) {
-      const { state } = JSON.parse(authStorage);
-      if (state?.token) {
-        config.headers.Authorization = `Bearer ${state.token}`;
-      }
-    }
+  const token = useAuthStore.getState().token;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-// Interceptor: si recibe 401, limpia auth y redirige a login
+// Interceptor: si recibe 401, limpia el store (el layout protegido redirige a /login)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('auth-storage');
-        window.location.href = '/login';
-      }
+      useAuthStore.getState().clearAuth();
     }
     return Promise.reject(error);
   }

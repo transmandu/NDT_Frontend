@@ -4,22 +4,10 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Sigma, Hash } from 'lucide-react';
 import KaTeX, { MathBlock } from '@/components/math/KaTeX';
+import type { UncertaintySource } from '@/types/calibration';
 
 const ORANGE = '#FFA526';
 const BLUE   = '#3b82f6';
-
-/* ─── Types ─────────────────────────────────────────────────── */
-interface UncertaintySource {
-  source_name: string;
-  type: 'A' | 'B';
-  distribution: string;
-  value: number;
-  divisor: number;
-  sensitivity_coefficient: number;
-  standard_uncertainty: number;
-  degrees_of_freedom: number | null;
-  note?: string;
-}
 
 interface PointResult {
   nominal_value: number;

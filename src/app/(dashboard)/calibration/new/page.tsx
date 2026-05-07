@@ -4,10 +4,11 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/api';
+import { isAxiosError } from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calculator, Send, Save, Loader2, Info, BookOpen, ChevronDown, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { Instrument, Standard, GridSchema } from '@/types/calibration';
+import type { Instrument, Standard, GridSchema, BudgetPreview } from '@/types/calibration';
 import DynamicGrid, { type GridData } from '@/components/calibration/DynamicGrid';
 import { isSameCategory } from '@/lib/categoryUtils';
 
@@ -72,7 +73,7 @@ export default function NewCalibrationPage() {
   // ─── Submission state ───
   const [submitting, setSubmitting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [budgetResult, setBudgetResult] = useState<any>(null);
+  const [budgetResult, setBudgetResult] = useState<BudgetPreview | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, Set<string>>>({});
 
   // Reset form inputs whenever the selected instrument changes
@@ -298,6 +299,26 @@ export default function NewCalibrationPage() {
     return payload;
   }, [gridDataMap, grids, selectedInst, selectedStd, environmentalData, calibrationDate, nextCalibrationDate, technicianObservation, tempUncertainty]);
 
+  // ─── Session creation body (shared by draft + submit) ───
+  const buildSessionBody = useCallback(() => ({
+    instrument_id:                    parseInt(selectedInstrument),
+    procedure_schema_id:              matchedSchema?.id,
+    category:                         selectedInst?.category || '',
+    ambient_temperature:              parseFloat(environmentalData.air_temperature || '20'),
+    ambient_temperature_uncertainty:  parseFloat(tempUncertainty || '1.0'),
+    ambient_humidity:                 parseFloat(environmentalData.humidity || '50'),
+    ambient_pressure:                 environmentalData.ambient_pressure ? parseFloat(environmentalData.ambient_pressure) : null,
+    observation:                      technicianObservation || null,
+    standard_ids: [
+      parseInt(selectedStandard),
+      ...(procedureCode === 'M-LAB-01' && selectedStandard2 ? [parseInt(selectedStandard2)] : []),
+    ],
+    calibration_date:      calibrationDate || new Date().toISOString().split('T')[0],
+    next_calibration_date: nextCalibrationDate || null,
+  }), [selectedInstrument, matchedSchema, selectedInst, environmentalData, tempUncertainty,
+       technicianObservation, selectedStandard, procedureCode, selectedStandard2,
+       calibrationDate, nextCalibrationDate]);
+
   // ─── Validate required fields ───
   const validateFields = useCallback((): boolean => {
     if (!selectedInstrument) { toast.error('Seleccione un instrumento'); return false; }
@@ -368,24 +389,8 @@ export default function NewCalibrationPage() {
     setSaving(true);
     try {
       const payload = buildPayload();
-      const res = await api.post('/calibration/sessions', {
-        instrument_id: parseInt(selectedInstrument),
-        procedure_schema_id: matchedSchema.id,
-        category: selectedInst?.category || '',
-        ambient_temperature: parseFloat(environmentalData.air_temperature || '20'),
-        ambient_temperature_uncertainty: parseFloat(tempUncertainty || '1.0'),
-        ambient_humidity: parseFloat(environmentalData.humidity || '50'),
-        ambient_pressure: environmentalData.ambient_pressure ? parseFloat(environmentalData.ambient_pressure) : null,
-        observation: technicianObservation || null,
-        standard_ids: [
-          parseInt(selectedStandard),
-          ...(procedureCode === 'M-LAB-01' && selectedStandard2 ? [parseInt(selectedStandard2)] : []),
-        ],
-        calibration_date: calibrationDate || new Date().toISOString().split('T')[0],
-        next_calibration_date: nextCalibrationDate || null,
-      });
+      const res = await api.post('/calibration/sessions', buildSessionBody());
 
-      // Update the session with raw payload
       if (res.data.session_id) {
         await api.put(`/calibration/sessions/${res.data.session_id}`, {
           raw_payload: payload,
@@ -393,8 +398,8 @@ export default function NewCalibrationPage() {
       }
 
       toast.success(`Borrador guardado (Sesión #${res.data.session_id})`);
-    } catch (err: any) {
-      const msg = err.response?.data?.message || 'Error guardando borrador';
+    } catch (err: unknown) {
+      const msg = isAxiosError(err) ? (err.response?.data?.message || 'Error guardando borrador') : 'Error guardando borrador';
       toast.error(msg);
     } finally {
       setSaving(false);
@@ -415,22 +420,7 @@ export default function NewCalibrationPage() {
       const payload = buildPayload();
 
       // 1. Create session as draft
-      const createRes = await api.post('/calibration/sessions', {
-        instrument_id: parseInt(selectedInstrument),
-        procedure_schema_id: matchedSchema.id,
-        category: selectedInst?.category || '',
-        ambient_temperature: parseFloat(environmentalData.air_temperature || '20'),
-        ambient_temperature_uncertainty: parseFloat(tempUncertainty || '1.0'),
-        ambient_humidity: parseFloat(environmentalData.humidity || '50'),
-        ambient_pressure: environmentalData.ambient_pressure ? parseFloat(environmentalData.ambient_pressure) : null,
-        observation: technicianObservation || null,
-        standard_ids: [
-          parseInt(selectedStandard),
-          ...(procedureCode === 'M-LAB-01' && selectedStandard2 ? [parseInt(selectedStandard2)] : []),
-        ],
-        calibration_date: calibrationDate || new Date().toISOString().split('T')[0],
-        next_calibration_date: nextCalibrationDate || null,
-      });
+      const createRes = await api.post('/calibration/sessions', buildSessionBody());
 
       const sessionId = createRes.data.session_id;
 
@@ -441,10 +431,12 @@ export default function NewCalibrationPage() {
 
       setBudgetResult(submitRes.data.budget_preview);
       toast.success(`✅ Sesión #${sessionId} procesada y enviada a revisión`);
-    } catch (err: any) {
-      const msg = err.response?.data?.message || err.response?.data?.error || 'Error procesando calibración';
+    } catch (err: unknown) {
+      const msg = isAxiosError(err)
+        ? (err.response?.data?.message || err.response?.data?.error || 'Error procesando calibración')
+        : 'Error procesando calibración';
       toast.error(msg);
-      console.error('Submit error:', err.response?.data);
+      if (isAxiosError(err)) console.error('Submit error:', err.response?.data);
     } finally {
       setSubmitting(false);
     }

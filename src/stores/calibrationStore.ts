@@ -1,11 +1,14 @@
 import { create } from 'zustand';
 
+// Matches DynamicGrid's GridData type: row index → column key → cell value
+type GridCellData = Record<number, Record<string, string>>;
+
 interface CalibrationState {
-  grids: Record<string, any[]>;
+  grids: Record<string, GridCellData>;
   metadata: Record<string, number | string>;
-  setGridData: (gridId: string, data: any[]) => void;
+  setGridData: (gridId: string, data: GridCellData) => void;
   setMetadata: (key: string, value: number | string) => void;
-  getPayload: () => { grids: Record<string, any[]>; metadata: Record<string, number | string> };
+  getPayload: () => { grids: Record<string, GridCellData>; metadata: Record<string, number | string> };
   reset: () => void;
 }
 

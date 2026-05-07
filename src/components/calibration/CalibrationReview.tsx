@@ -15,10 +15,17 @@
  *  - onBack: () => void  — callback fired after approve/reject or when user clicks "Volver"
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import type { CalibrationSession, UncertaintySource } from '@/types/calibration';
+
+type BudgetPointWithFunction = {
+  function?: string;
+  uncertainty_sources?: UncertaintySource[];
+  [key: string]: unknown;
+};
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/stores/authStore';
 import {
@@ -37,34 +44,29 @@ const COLORS = { primary: C.primary, success: C.success, danger: C.danger };
 /*  Main Component                                            */
 /* ══════════════════════════════════════════════════════════ */
 export default function CalibrationReview({ id, onBack }: { id: number; onBack: () => void }) {
-  const [session, setSession]             = useState<any>(null);
   const [showProcedure, setShowProcedure] = useState(false);
   const [rejectOpen, setRejectOpen]       = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const [loading, setLoading]             = useState(true);
   const [approvedCertId, setApprovedCertId] = useState<number | null>(null);
   const [downloading, setDownloading]     = useState(false);
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
 
+  const { data: session, isLoading: loading } = useQuery<CalibrationSession>({
+    queryKey: ['calibrationSession', id],
+    queryFn: () => api.get(`/calibration/sessions/${id}`).then(r => r.data),
+  });
+
   const isAuditor = user?.role === 'auditor' || user?.role === 'admin';
   const isPending = session?.status === 'pending_review';
-
-  useEffect(() => {
-    setLoading(true);
-    api.get(`/calibration/sessions/${id}`)
-      .then(r => setSession(r.data))
-      .catch(() => toast.error('No se pudo cargar la sesión'))
-      .finally(() => setLoading(false));
-  }, [id]);
 
   const handleApprove = async () => {
     setActionLoading(true);
     try {
       const res = await api.post(`/calibration/sessions/${id}/approve`);
       const { certificate_id, pdf_ready } = res.data;
-      // Invalidate caches so the lists update immediately
       queryClient.invalidateQueries({ queryKey: ['calibrationSessions'] });
+      queryClient.invalidateQueries({ queryKey: ['calibrationSession', id] });
       queryClient.invalidateQueries({ queryKey: ['certificates'] });
       if (certificate_id && pdf_ready) {
         setApprovedCertId(certificate_id);
@@ -103,8 +105,8 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
     setActionLoading(true);
     try {
       await api.post(`/calibration/sessions/${id}/reject`, { reason });
-      // Invalidate cache so the pending list updates
       queryClient.invalidateQueries({ queryKey: ['calibrationSessions'] });
+      queryClient.invalidateQueries({ queryKey: ['calibrationSession', id] });
       toast.success('Sesion rechazada - el tecnico fue notificado');
       onBack();
     } catch {
@@ -116,41 +118,38 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
   };
 
   /* ── Flatten results from any strategy shape ── */
-  const allResults: any[] = (() => {
+  const allResults: BudgetPointWithFunction[] = (() => {
     if (!session) return [];
     const source = session.calculated_results || session.final_results;
     if (!source) return [];
     if (source.functions) {
-      const flat: any[] = [];
+      const flat: BudgetPointWithFunction[] = [];
       for (const [funcKey, points] of Object.entries(source.functions)) {
-        for (const pt of points as any[]) {
+        for (const pt of points) {
           flat.push({ ...pt, function: funcKey });
         }
       }
       return flat;
     }
-    if (source.points)    return source.points;
-    if (Array.isArray(source)) return source;
+    if (source.points) return source.points;
     return [];
   })();
 
   const hasDetailedSources = allResults.some(
-    (r: any) => r.uncertainty_sources && r.uncertainty_sources.length > 0
+    r => (r.uncertainty_sources?.length ?? 0) > 0
   );
 
   // ── Unified GUM budget (shown once, between sections 1 and 2) ──
   const sharedBudget = (() => {
     if (!hasDetailedSources) return null;
-    // Get the Type B sources from the first point with sources
-    const firstWithSrc = allResults.find((r: any) => r.uncertainty_sources?.length > 0);
+    const firstWithSrc = allResults.find(r => (r.uncertainty_sources?.length ?? 0) > 0);
     if (!firstWithSrc) return null;
-    const typeBSources = (firstWithSrc.uncertainty_sources as any[]).filter((s: any) => s.type === 'B');
-    // Get u(A) per function (or just per point for non-vernier)
-    const funcMap: Record<string, any> = {};
+    const typeBSources: UncertaintySource[] = (firstWithSrc.uncertainty_sources ?? []).filter(s => s.type === 'B');
+    const funcMap: Record<string, { label: string | undefined; source: UncertaintySource }> = {};
     for (const r of allResults) {
-      const key = r.function || '__single__';
+      const key = r.function ?? '__single__';
       if (!funcMap[key]) {
-        const uA = (r.uncertainty_sources as any[] || []).find((s: any) => s.type === 'A');
+        const uA = (r.uncertainty_sources ?? []).find(s => s.type === 'A');
         if (uA) funcMap[key] = { label: r.function, source: uA };
       }
     }
@@ -269,7 +268,7 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
                   </thead>
                   <tbody>
                     {/* u(A) rows — one per function */}
-                    {sharedBudget.uAPerFunc.map((item: any, i: number) => (
+                    {sharedBudget.uAPerFunc.map((item, i) => (
                       <tr key={`uA-${i}`} className="hover-bg transition-colors" style={{ borderBottom: bd }}>
                         <td className="px-3 py-2 font-medium" style={{ borderRight: bd, color: 'var(--text-main)' }}>
                           <span className="block">{item.source.source_name}</span>
@@ -288,7 +287,7 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
                       </tr>
                     ))}
                     {/* Shared Type B sources */}
-                    {sharedBudget.typeBSources.map((src: any, i: number) => (
+                    {sharedBudget.typeBSources.map((src, i) => (
                       <tr key={`B-${i}`} className="hover-bg transition-colors" style={{ borderBottom: bd }}>
                         <td className="px-3 py-2 font-medium" style={{ borderRight: bd, color: 'var(--text-main)' }}>
                           <span className="block">{src.source_name}</span>
@@ -556,7 +555,7 @@ const f5 = (v: number | string | undefined | null, fallback = '—'): string => 
   return parseFloat(n.toFixed(5)).toString();
 };
 
-function ResultsTable({ results, highlight }: { results: any[]; highlight?: boolean }) {
+function ResultsTable({ results, highlight }: { results: BudgetPointWithFunction[]; highlight?: boolean }) {
   const funcMap: Record<string, string> = { exterior: 'Exterior', interior: 'Interior', depth: 'Profundidad' };
   const hasFunction = results.some(r => r.function);
   const hasError    = results.some(r => r.error !== undefined);
@@ -576,7 +575,7 @@ function ResultsTable({ results, highlight }: { results: any[]; highlight?: bool
           <th className="px-3 py-2 text-[11px] text-right font-bold">U (expandida)</th>
         </tr></thead>
         <tbody className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
-          {results.map((r: any, i: number) => (
+          {results.map((r, i) => (
             <motion.tr key={i}
               initial={highlight ? { backgroundColor: 'rgba(255,165,38,0.1)' } : {}}
               animate={{ backgroundColor: 'transparent' }}

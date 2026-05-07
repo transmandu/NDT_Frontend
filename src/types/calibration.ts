@@ -1,3 +1,57 @@
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  job_title?: string;
+}
+
+export interface UncertaintySource {
+  source_name: string;
+  type: 'A' | 'B';
+  distribution: string;
+  value?: number;
+  divisor?: number;
+  sensitivity_coefficient?: number;
+  standard_uncertainty: number;
+  degrees_of_freedom: number | null;
+  note?: string;
+}
+
+export interface BudgetPoint {
+  nominal_value?: number;
+  nominal_length_mm?: number;
+  nominal?: number;
+  nominal_bar?: number;
+  point_g?: number;
+  error?: number;
+  error_descending?: number;
+  hysteresis?: number;
+  expanded_uncertainty_mm?: number;
+  expanded_u?: number;
+  combined_uncertainty_mm?: number;
+  k_factor?: number;
+  effective_dof?: number;
+  mean?: number;
+  average_measured?: number;
+  instrument?: number;
+  instrument_bar?: number;
+  uncertainty_sources?: UncertaintySource[];
+}
+
+export interface BudgetPreview {
+  functions?: Record<string, BudgetPoint[]>;
+  points?: BudgetPoint[];
+  temperature?: { points: BudgetPoint[] };
+  humidity?: { points: BudgetPoint[] };
+}
+
+export interface TraceabilityEntry {
+  lab: string;
+  certificate_number?: string;
+  date?: string;
+}
+
 export interface MetadataRequirement {
   field: string;
   label: string;
@@ -6,7 +60,7 @@ export interface MetadataRequirement {
   required: boolean;
   min?: number;
   max?: number;
-  default?: any;
+  default?: number | string | boolean | null;
 }
 
 export interface GridColumn {
@@ -85,9 +139,17 @@ export interface CalibrationSession {
   approved_at: string | null;
   created_at: string;
   updated_at: string;
-  instrument?: any;
-  technician?: any;
-  procedure_schema?: any;
+  instrument?: Instrument;
+  technician?: User;
+  procedure_schema?: ProcedureSchema;
+  standards?: Standard[];
+  calculated_results?: BudgetPreview & { unit?: string };
+  final_results?: BudgetPreview & { unit?: string };
+  raw_payload?: Record<string, unknown>;
+  calibration_date?: string | null;
+  next_calibration_date?: string | null;
+  ambient_temperature_uncertainty?: number | null;
+  approved_by?: number | null;
 }
 
 export interface Instrument {
@@ -122,7 +184,7 @@ export interface Standard {
   calibration_date: string | null;
   expiry_date: string;
   calibrated_by_lab: string | null;
-  traceability_chain: any[] | null;
+  traceability_chain: TraceabilityEntry[] | null;
   /* Category-specific metrological fields */
   drift_rate_per_year: number | null; // Mass: OIML drift
   oiml_class: string | null;           // Mass: E1, E2, F1, F2, M1…
