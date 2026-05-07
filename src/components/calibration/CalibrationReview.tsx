@@ -138,6 +138,25 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
     (r: any) => r.uncertainty_sources && r.uncertainty_sources.length > 0
   );
 
+  // ── Unified GUM budget (shown once, between sections 1 and 2) ──
+  const sharedBudget = (() => {
+    if (!hasDetailedSources) return null;
+    // Get the Type B sources from the first point with sources
+    const firstWithSrc = allResults.find((r: any) => r.uncertainty_sources?.length > 0);
+    if (!firstWithSrc) return null;
+    const typeBSources = (firstWithSrc.uncertainty_sources as any[]).filter((s: any) => s.type === 'B');
+    // Get u(A) per function (or just per point for non-vernier)
+    const funcMap: Record<string, any> = {};
+    for (const r of allResults) {
+      const key = r.function || '__single__';
+      if (!funcMap[key]) {
+        const uA = (r.uncertainty_sources as any[] || []).find((s: any) => s.type === 'A');
+        if (uA) funcMap[key] = { label: r.function, source: uA };
+      }
+    }
+    return { typeBSources, uAPerFunc: Object.values(funcMap) };
+  })();
+
   /* ── Loading skeleton ── */
   if (loading) return (
     <div className="flex items-center justify-center h-64 gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -213,13 +232,94 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
           </div>
         </div>
 
-        {/* 2. Results summary */}
+        {/* 2. GUM Budget — shown ONCE, before results */}
+        {sharedBudget && (() => {
+          const bd       = '1px solid var(--border-color)';
+          const bdStrong = '2px solid var(--border-color)';
+          const thMuted  = { color: 'var(--text-muted)', borderColor: 'var(--border-color)' };
+          const funcLabels: Record<string, string> = {
+            exterior: 'Bocas Exteriores',
+            interior: 'Bocas Interiores',
+            depth:    'Sonda de Profundidad',
+            __single__: 'Instrumento',
+          };
+          const typeBadge = (type: string) => (
+            <span className="inline-block px-1.5 py-0.5 rounded text-[8px] font-bold uppercase"
+              style={{
+                backgroundColor: type === 'A' ? 'rgba(16,185,129,0.12)' : 'rgba(99,102,241,0.12)',
+                color:           type === 'A' ? '#10B981' : '#818CF8',
+                border:          `1px solid ${type === 'A' ? '#10B98130' : '#818CF830'}`,
+              }}>{type}</span>
+          );
+          return (
+            <div className="rounded-md p-4 mb-6" style={{ backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-color)' }}>
+              <h3 className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{ color: 'var(--text-main)' }}>
+                2. Presupuesto de Incertidumbre (GUM) — Fuentes
+              </h3>
+              <div className="rounded-md overflow-hidden" style={{ border: bd }}>
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr style={{ backgroundColor: 'var(--bg-app)', borderBottom: bdStrong }}>
+                      <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold" style={{ ...thMuted, width: 280, borderRight: bd }}>Fuente</th>
+                      <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-center" style={{ ...thMuted, width: 44, borderRight: bd }}>Tipo</th>
+                      <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold" style={{ ...thMuted, borderRight: bd }}>Distribución</th>
+                      <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-right" style={{ ...thMuted, borderRight: bd }}>u(xi) [µm]</th>
+                      <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-right" style={thMuted}>ν (g.l.)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* u(A) rows — one per function */}
+                    {sharedBudget.uAPerFunc.map((item: any, i: number) => (
+                      <tr key={`uA-${i}`} className="hover-bg transition-colors" style={{ borderBottom: bd }}>
+                        <td className="px-3 py-2 font-medium" style={{ borderRight: bd, color: 'var(--text-main)' }}>
+                          <span className="block">{item.source.source_name}</span>
+                          <span className="block text-[9px] opacity-50 font-mono truncate">
+                            {funcLabels[item.label] ?? item.label} — {item.source.note}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-center" style={{ borderRight: bd }}>{typeBadge('A')}</td>
+                        <td className="px-3 py-2 text-[11px]" style={{ borderRight: bd, color: 'var(--text-muted)' }}>{item.source.distribution}</td>
+                        <td className="px-3 py-2 text-right font-mono font-semibold" style={{ borderRight: bd, color: 'var(--text-main)' }}>
+                          {typeof item.source.standard_uncertainty === 'number' ? item.source.standard_uncertainty.toFixed(4) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text-muted)' }}>
+                          {item.source.degrees_of_freedom ?? '∞'}
+                        </td>
+                      </tr>
+                    ))}
+                    {/* Shared Type B sources */}
+                    {sharedBudget.typeBSources.map((src: any, i: number) => (
+                      <tr key={`B-${i}`} className="hover-bg transition-colors" style={{ borderBottom: bd }}>
+                        <td className="px-3 py-2 font-medium" style={{ borderRight: bd, color: 'var(--text-main)' }}>
+                          <span className="block">{src.source_name}</span>
+                          {src.note && (
+                            <span className="block text-[9px] mt-0.5 opacity-50 font-mono truncate" title={src.note}>{src.note}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center" style={{ borderRight: bd }}>{typeBadge('B')}</td>
+                        <td className="px-3 py-2 text-[11px]" style={{ borderRight: bd, color: 'var(--text-muted)' }}>{src.distribution}</td>
+                        <td className="px-3 py-2 text-right font-mono font-semibold" style={{ borderRight: bd, color: 'var(--text-main)' }}>
+                          {typeof src.standard_uncertainty === 'number' ? src.standard_uncertainty.toFixed(4) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text-muted)' }}>
+                          {src.degrees_of_freedom ?? '∞'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* 3. Results summary */}
         <AnimatePresence mode="wait">
           {!showProcedure && allResults.length > 0 && (
             <motion.div key="results-top"
               initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20, transition: { duration: 0.2 } }} transition={{ duration: 0.35 }}>
-              <h3 className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{ color: 'var(--text-main)' }}>2. Resultados de Incertidumbre</h3>
+              <h3 className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{ color: 'var(--text-main)' }}>3. Resultados de Incertidumbre</h3>
               <ResultsTable results={allResults} />
             </motion.div>
           )}

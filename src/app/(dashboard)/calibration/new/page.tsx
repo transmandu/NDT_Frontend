@@ -19,6 +19,17 @@ const COLORS = { primary: C.primary, success: C.success };
 // Strategies that are fully implemented in the backend
 const IMPLEMENTED_STRATEGIES = ['ME-005', 'ME-003', 'EL-001', 'M-LAB-01', 'ISO-6789', 'DIM-001'];
 
+// Metadata fields that are ALWAYS read-only (sourced from DB or are physical constants).
+// Used as fallback in case the schema's readonly flag is not yet in cache.
+const READONLY_META_FIELDS = new Set([
+  'instrument_range_mm',   // from instrument.range_max
+  'standard_u_base_um',    // from standard.uncertainty_u
+  'standard_u_slope',      // from standard.uncertainty_slope
+  'standard_drift_um',     // from standard.drift_rate_per_year
+  'delta_alpha',           // physical constant (EURAMET cg-16)
+]);
+
+
 export default function NewCalibrationPage() {
   const router = useRouter();
 
@@ -76,18 +87,23 @@ export default function NewCalibrationPage() {
     setSelectedStandard2('');
   }, [selectedInstrument]);
 
+
   // Derived selections needed for queries
   const selectedInst = instruments.find((i: Instrument) => String(i.id) === selectedInstrument);
   const baseSchemaCode = selectedInst && schemas.length > 0
     ? schemas.find((s: { category?: string; code?: string }) => s.category?.toLowerCase() === selectedInst.category?.toLowerCase())?.code
     : null;
 
-  // ─── Load full schema when instrument changes (Cached via Tanstack Query) ───
+  // ─── Load full schema when instrument changes ───
+  // staleTime: 0 → always fetches fresh schema (avoids stale cache after reseeds)
   const { data: matchedSchema = null, isFetching: loadingSchema } = useQuery({
     queryKey: ['schema', baseSchemaCode],
     queryFn: () => api.get(`/calibration/schema/${baseSchemaCode}`).then(res => res.data.schema),
     enabled: !!baseSchemaCode,
+    staleTime: 0,   // always re-fetch on mount to pick up schema changes
+    gcTime: 0,      // don't keep stale data in memory
   });
+
 
   // ─── Derived ───
   const selectedStd = standards.find((s: Standard) => String(s.id) === selectedStandard);
@@ -118,6 +134,52 @@ export default function NewCalibrationPage() {
       if (!stillValid) setSelectedStandard('');
     }
   }, [selectedInstrument, filteredStandards]);
+
+  // ── Auto-preload metadata fields from instrument + standard in DB ──────────
+  // Runs whenever both instrument and standard are resolved (selectedInst/selectedStd change).
+  // Only fills fields still empty — does NOT overwrite user edits.
+  useEffect(() => {
+    if (!selectedInst || !selectedStd) return;
+
+    setEnvironmentalData(prev => {
+      const next = { ...prev };
+
+      // ── From INSTRUMENT ──────────────────────────────────────────────────────
+      if (!next.instrument_range_mm && selectedInst.range_max != null)
+        next.instrument_range_mm = String(selectedInst.range_max);
+
+      // ── From STANDARD (bloque patrón / reference) ────────────────────────────
+      // U base (término 'a' de U = a + b×L, µm)
+      if (!next.standard_u_base_um && selectedStd.uncertainty_u != null)
+        next.standard_u_base_um = String(selectedStd.uncertainty_u);
+
+      // k del patrón (k=2 para normal, según certificado)
+      if (!next.thermometer_k && selectedStd.k_factor != null)
+        next.thermometer_k = String(selectedStd.k_factor);
+
+      // Pendiente (b en U=a+b×L, µm/mm)
+      if (!next.standard_u_slope && (selectedStd as any).uncertainty_slope != null)
+        next.standard_u_slope = String((selectedStd as any).uncertainty_slope);
+
+      // Deriva del bloque patrón (µm/año desde historial)
+      if (!next.standard_drift_um
+        && (selectedStd as any).drift_rate_per_year != null
+        && (selectedStd as any).drift_rate_per_year > 0)
+        next.standard_drift_um = String((selectedStd as any).drift_rate_per_year);
+
+      // ── Defaults ambientales ─────────────────────────────────────────────────
+      if (!next.air_temperature)          next.air_temperature          = '20';
+      if (!next.humidity)                 next.humidity                 = '50';
+      if (!next.thermometer_uncertainty_u)next.thermometer_uncertainty_u= '1.0';
+      if (!next.delta_alpha)              next.delta_alpha              = String(0.82e-6);
+
+      return next;
+    });
+
+    setTempUncertainty(prev => prev || '1.0');
+
+  }, [selectedInst, selectedStd]);
+
 
   // ─── Grid data handler ───
   const handleGridChange = useCallback((gridId: string, data: GridData) => {
@@ -676,6 +738,7 @@ export default function NewCalibrationPage() {
                   </span>
                 </div>
 
+                {/* ── Editable fields: measured by the technician ── */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {(matchedSchema.ui_schema?.metadata_requirements || []).map((req: any, idx: number) => {
                     const isBool    = req.type === 'boolean' || req.type === 'checkbox';
@@ -751,7 +814,51 @@ export default function NewCalibrationPage() {
                     );
                   })}
                 </div>
+
+                {/* ── Readonly fields: auto-loaded from DB / physical constants ── */}
+                {(matchedSchema.ui_schema?.metadata_requirements || [])
+                  .some((r: any) => r.readonly || READONLY_META_FIELDS.has(r.field)) && (
+                  <div className="mt-4 pt-3" style={{ borderTop: '1px dashed var(--border-color)' }}>
+                    <p className="text-[9px] uppercase tracking-widest font-semibold mb-2 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                      <span>🔒</span>
+                      Datos del patrón e instrumento — cargados automáticamente desde base de datos
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                      {(matchedSchema.ui_schema?.metadata_requirements || [])
+                        .filter((req: any) => req.readonly || READONLY_META_FIELDS.has(req.field))
+                        .map((req: any, idx: number) => {
+                          const val = environmentalData[req.field] ?? req.default;
+                          const numVal = parseFloat(String(val ?? ''));
+                          const display = val != null && !isNaN(numVal)
+                            ? (numVal < 0.001 && numVal > 0 ? numVal.toExponential(2) : String(val))
+                            : '—';
+                          return (
+                            <div key={idx}
+                              className="px-2.5 py-2 rounded-md flex flex-col gap-0.5"
+                              style={{
+                                backgroundColor: 'var(--bg-app)',
+                                border: '1px solid var(--border-color)',
+                                cursor: 'not-allowed',
+                                userSelect: 'none',
+                              }}>
+                              <span className="text-[9px] uppercase tracking-wider truncate" style={{ color: 'var(--text-muted)' }}>
+                                {req.label}
+                              </span>
+                              <span className="text-[11px] font-mono font-semibold" style={{ color: 'var(--text-main)' }}>
+                                {display}
+                                {req.unit
+                                  ? <span className="text-[9px] font-normal opacity-50 ml-0.5">{req.unit}</span>
+                                  : null}
+                              </span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
               </div>
+
+
 
               {/* ── Static Certificate Fields (ISO 7.8.4) ──────────────── */}
               <div id="tour-cal-dates" className="mt-4 p-4 rounded-md" style={{ backgroundColor: 'var(--bg-app)', border: '1px solid var(--border-color)' }}>
@@ -997,8 +1104,94 @@ function UnifiedResultsTable({
       depth:    'Sonda de Profundidad',
     };
 
+    // ── Shared Type B sources (identical across all functions, from first point) ──
+    const firstFuncPoints: any[] = Object.values(functions).find((pts: any) => pts?.length > 0) || [];
+    const allSources: any[]      = firstFuncPoints[0]?.uncertainty_sources || [];
+    const typeBSources            = allSources.filter((s: any) => s.type === 'B');
+
+    const bd       = '1px solid var(--border-color)';
+    const bdStrong = '2px solid var(--border-color)';
+    const thMuted  = { color: 'var(--text-muted)', borderColor: 'var(--border-color)' };
+    const typeBadge = (type: string) => (
+      <span className="inline-block px-1.5 py-0.5 rounded text-[8px] font-bold uppercase"
+        style={{
+          backgroundColor: type === 'A' ? 'rgba(16,185,129,0.12)' : 'rgba(99,102,241,0.12)',
+          color:           type === 'A' ? '#10B981' : '#818CF8',
+          border:          `1px solid ${type === 'A' ? '#10B98130' : '#818CF830'}`,
+        }}>{type}</span>
+    );
+
     return (
       <div className="flex flex-col gap-8">
+
+        {/* ══ PRESUPUESTO GUM UNIFICADO — se muestra UNA sola vez ══ */}
+        <div>
+          <p className="text-[10px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>
+            Presupuesto de Incertidumbre (GUM) — Fuentes
+          </p>
+          <div className="rounded-md overflow-hidden" style={{ border: bd }}>
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr style={{ backgroundColor: 'var(--bg-app)', borderBottom: bdStrong }}>
+                  <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold" style={{ ...thMuted, width: 260, borderRight: bd }}>Fuente</th>
+                  <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-center" style={{ ...thMuted, width: 44, borderRight: bd }}>Tipo</th>
+                  <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold" style={{ ...thMuted, borderRight: bd }}>Distribución</th>
+                  <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-right" style={{ ...thMuted, borderRight: bd }}>u(xi) [µm]</th>
+                  <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-right" style={thMuted}>ν (g.l.)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* u(A) — one row per function */}
+                {Object.entries(functions).map(([funcKey, funcPoints]: [string, any]) => {
+                  if (!funcPoints?.length) return null;
+                  const uASrc = funcPoints[0]?.uncertainty_sources?.find((s: any) => s.type === 'A');
+                  if (!uASrc) return null;
+                  return (
+                    <tr key={`uA-${funcKey}`} className="td-theme hover-bg transition-colors" style={{ borderBottom: bd }}>
+                      <td className="px-3 py-2 font-medium" style={{ borderRight: bd, color: 'var(--text-main)' }}>
+                        <span className="block">{uASrc.source_name}</span>
+                        <span className="block text-[9px] opacity-50 font-normal font-mono truncate max-w-[240px]">
+                          {funcLabels[funcKey] ?? funcKey} — {uASrc.note}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-center" style={{ borderRight: bd }}>{typeBadge('A')}</td>
+                      <td className="px-3 py-2 text-[11px]" style={{ borderRight: bd, color: 'var(--text-muted)' }}>{uASrc.distribution}</td>
+                      <td className="px-3 py-2 text-right font-mono font-semibold" style={{ borderRight: bd, color: 'var(--text-main)' }}>
+                        {typeof uASrc.standard_uncertainty === 'number' ? uASrc.standard_uncertainty.toFixed(4) : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text-muted)' }}>
+                        {uASrc.degrees_of_freedom ?? '∞'}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {/* Shared Type B sources */}
+                {typeBSources.map((src: any, i: number) => (
+                  <tr key={`B-${i}`} className="td-theme hover-bg transition-colors" style={{ borderBottom: bd }}>
+                    <td className="px-3 py-2 font-medium" style={{ borderRight: bd, color: 'var(--text-main)' }}>
+                      <span className="block">{src.source_name}</span>
+                      {src.note && (
+                        <span className="block text-[9px] mt-0.5 opacity-50 font-normal font-mono truncate max-w-[240px]" title={src.note}>
+                          {src.note}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-center" style={{ borderRight: bd }}>{typeBadge('B')}</td>
+                    <td className="px-3 py-2 text-[11px]" style={{ borderRight: bd, color: 'var(--text-muted)' }}>{src.distribution}</td>
+                    <td className="px-3 py-2 text-right font-mono font-semibold" style={{ borderRight: bd, color: 'var(--text-main)' }}>
+                      {typeof src.standard_uncertainty === 'number' ? src.standard_uncertainty.toFixed(4) : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text-muted)' }}>
+                      {src.degrees_of_freedom ?? '∞'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* ══ RESULTADOS POR FUNCIÓN — sin repetir el presupuesto ══ */}
         {Object.entries(functions).map(([funcKey, funcPoints]) => {
           if (!funcPoints || funcPoints.length === 0) return null;
           return (
@@ -1007,8 +1200,7 @@ function UnifiedResultsTable({
                 style={{ color: 'var(--text-muted)' }}>
                 📐 {funcLabels[funcKey] ?? funcKey}
               </p>
-              {/* Reuse standard table for each function's points with µm unit */}
-              <VernierFunctionTable points={funcPoints} />
+              <VernierFunctionTable points={funcPoints} showBudget={false} />
             </div>
           );
         })}
@@ -1275,7 +1467,7 @@ function UnifiedResultsTable({
 /* ─── VernierFunctionTable ───────────────────────────────── */
 /* Renders results for a single Vernier function (ext/int/depth). */
 /* The backend returns values in µm internally; we show both µm and mm. */
-function VernierFunctionTable({ points }: { points: any[] }) {
+function VernierFunctionTable({ points, showBudget = true }: { points: any[]; showBudget?: boolean }) {
   if (!points || points.length === 0) return null;
 
   const first = points[0];
@@ -1297,7 +1489,8 @@ function VernierFunctionTable({ points }: { points: any[] }) {
   return (
     <div className="flex flex-col gap-4">
 
-      {/* ══ TABLE 1: BUDGET — sources from first point (same structure for all) ══ */}
+      {/* ══ TABLE 1: BUDGET (only when not suppressed by parent) ══ */}
+      {showBudget && (
       <div>
         <p className="text-[10px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>
           Presupuesto de Incertidumbre (GUM) — Fuentes
@@ -1338,6 +1531,7 @@ function VernierFunctionTable({ points }: { points: any[] }) {
           </table>
         </div>
       </div>
+      )}
 
       {/* ══ TABLE 2: PER-POINT RESULTS — transposed (points as columns) ══ */}
       <div>

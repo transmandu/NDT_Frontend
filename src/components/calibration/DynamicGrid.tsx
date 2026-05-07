@@ -66,6 +66,35 @@ function computeValue(
     return vals.length ? fmt(avg(vals), prec) : '';
   }
 
+  // ── DIM-001 vernier keys ──────────────────────────────────
+  if (key === 'mean_mm') {
+    // Mean of readings array, in mm
+    if (!primaryCol) return '';
+    const vals = numericVals(rowData[primaryCol.key] || '');
+    return vals.length ? fmt(avg(vals), prec) : '';
+  }
+
+  if (key === 'deviation_um') {
+    // (mean_readings − standard_length_mm) × 1000  → µm
+    const readCol = gridColumns.find(c => c.type === 'number_array' && c.key === 'readings');
+    const stdCol  = gridColumns.find(c => c.key === 'standard_length_mm');
+    if (!readCol || !stdCol) return '';
+    const vals = numericVals(rowData[readCol.key] || '');
+    const std  = parseFloat(rowData[stdCol.key] || '');
+    if (!vals.length || isNaN(std)) return '';
+    return fmt((avg(vals) - std) * 1000, prec);
+  }
+
+  if (key === 'std_dev_um') {
+    // std_deviation of readings × 1000 → µm
+    const readCol = gridColumns.find(c => c.type === 'number_array' && c.key === 'readings');
+    if (!readCol) return '';
+    const vals = numericVals(rowData[readCol.key] || '');
+    if (vals.length < 2) return vals.length === 1 ? fmt(0, prec) : '';
+    return fmt(stddev(vals) * 1000, prec);
+  }
+  // ─────────────────────────────────────────────────────────
+
   if (key === 'error') {
     if (instrCol && stdCol) {
       const iA = colAvg(rowData, instrCol.key);
@@ -432,8 +461,21 @@ function StandardGrid({ grid, data, onChange, validationErrors }: {
     onChange(grid.id, init);
   }, [rowCount]);
 
-  const update = (rowIdx: number, colKey: string, val: string) =>
-    onChange(grid.id, { ...data, [rowIdx]: { ...(data[rowIdx] || {}), [colKey]: val } });
+  const update = (rowIdx: number, colKey: string, val: string) => {
+    const currentRow = data[rowIdx] || {};
+    const updatedRow = { ...currentRow, [colKey]: val };
+
+    // ── Auto-populate standard_length_mm from nominal_length_mm ──────────────
+    // When the technician sets the nominal length for a row and standard_length_mm
+    // is still empty (not manually set), auto-fill it with the same value.
+    // This prevents the bug where standard_length_mm defaults to a previous row's value.
+    if (colKey === 'nominal_length_mm' && !currentRow['standard_length_mm']) {
+      updatedRow['standard_length_mm'] = val;
+    }
+
+    onChange(grid.id, { ...data, [rowIdx]: updatedRow });
+  };
+
 
   const addRow = () => {
     const nextIdx = Object.keys(data).length;
