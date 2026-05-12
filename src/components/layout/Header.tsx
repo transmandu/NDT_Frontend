@@ -210,7 +210,7 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
                   >
                     <Zap size={14} className="shrink-0 mt-0.5" style={{ color: '#F59E0B' }} />
                     <div>
-                      <p className="text-[11px] font-semibold" style={{ color: 'var(--text-main)' }}>🚀 Tutorial Rápido</p>
+                      <p className="text-[11px] font-semibold" style={{ color: 'var(--text-main)' }}>Tutorial Rápido</p>
                       <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Resumen funcional de cada sección</p>
                     </div>
                   </button>
@@ -221,7 +221,7 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
                   >
                     <BookOpen size={14} className="shrink-0 mt-0.5" style={{ color: '#3B82F6' }} />
                     <div>
-                      <p className="text-[11px] font-semibold" style={{ color: 'var(--text-main)' }}>📚 Tutorial Extendido</p>
+                      <p className="text-[11px] font-semibold" style={{ color: 'var(--text-main)' }}>Tutorial Extendido</p>
                       <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Explicación metrológica detallada</p>
                     </div>
                   </button>
@@ -231,14 +231,14 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
           </div>
         )}
 
-        {/* 🌙 Tema */}
+        {/* Tema */}
         <button onClick={toggleTheme} className="p-1.5 rounded-md hover-bg transition-colors" style={{ color: 'var(--text-muted)' }}>
           <motion.div whileTap={{ rotate: 180 }} transition={{ duration: 0.15 }}>
             {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
           </motion.div>
         </button>
 
-        {/* 🔔 Notificaciones */}
+        {/* Notificaciones */}
         <div className="relative" ref={panelRef}>
           <button
             onClick={() => { setIsOpen(v => !v); if (!isOpen) fetchNotifications(); }}
@@ -363,7 +363,7 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
           </AnimatePresence>
         </div>
 
-        {/* 🚪 Logout */}
+        {/* Logout */}
         <button onClick={handleLogout} className="p-1.5 rounded-md hover-bg transition-colors hidden sm:block" style={{ color: 'var(--text-muted)' }} title="Cerrar sesión">
           <LogOut size={16} />
         </button>

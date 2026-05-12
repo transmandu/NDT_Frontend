@@ -23,12 +23,12 @@ import { C } from '@/lib/colors';
 const COLORS = { success: C.success, warning: C.warning, danger: C.danger, primary: C.primary };
 
 const STANDARD_CATEGORIES = [
-  { category: 'dimensional', label: 'Bloques Patrón / Calibre', prefix: 'BLK', icon: '📐', color: '#6366F1', unit: 'mm', description: 'Bloques Johansson, cintas patrón, calibres de referencia', extras: [{ key: 'uncertainty_slope', label: 'Pendiente de Incertidumbre (b)', type: 'number', hint: 'b en U = a + b·L [µm/mm]', placeholder: '0.001' }] },
+  { category: 'dimensional', label: 'Bloques Patrón / Calibre', prefix: 'BLK', icon: '', color: '#6366F1', unit: 'mm', description: 'Bloques Johansson, cintas patrón, calibres de referencia', extras: [{ key: 'uncertainty_slope', label: 'Pendiente de Incertidumbre (b)', type: 'number', hint: 'b en U = a + b·L [µm/mm]', placeholder: '0.001' }] },
   { category: 'mass',        label: 'Pesas Patrón OIML',       prefix: 'MAS', icon: '⚖️', color: '#10B981', unit: 'g',  description: 'Pesas clase E1/E2/F1/F2/M1/M2/M3 según OIML R111', extras: [{ key: 'oiml_class', label: 'Clase OIML', type: 'select', options: ['E1', 'E2', 'F1', 'F2', 'M1', 'M2', 'M3'], hint: 'Clase de exactitud según OIML R111' }, { key: 'drift_rate_per_year', label: 'Tasa de Deriva Anual', type: 'number', hint: 'mg/año observado (null = usar estimación OIML)', placeholder: '---' }, { key: 'mass_density', label: 'Densidad del Material', type: 'number', hint: 'kg/m³ para corrección de empuje del aire', placeholder: '8000' }] },
-  { category: 'torque',      label: 'Patrón de Torque',        prefix: 'TQP', icon: '🔧', color: '#F59E0B', unit: 'N·m', description: 'Transductor de torque de referencia trazable al BIPM', extras: [] },
-  { category: 'pressure',    label: 'Transductor Patrón',      prefix: 'PRE', icon: '🌡️', color: '#EF4444', unit: 'bar', description: 'Transductor de presión patrón de alta exactitud', extras: [] },
-  { category: 'electrical',  label: 'Calibrador de Proceso',   prefix: 'CAL', icon: '🔌', color: '#8B5CF6', unit: 'V',  description: 'Calibrador multiparámetro de señales eléctricas', extras: [] },
-  { category: 'temperature', label: 'Sensor de Referencia T',  prefix: 'TMP', icon: '💧', color: '#06B6D4', unit: '°C', description: 'Termómetro/termohigrómetro de referencia trazable', extras: [] },
+  { category: 'torque',      label: 'Patrón de Torque',        prefix: 'TQP', icon: '', color: '#F59E0B', unit: 'N·m', description: 'Transductor de torque de referencia trazable al BIPM', extras: [] },
+  { category: 'pressure',    label: 'Transductor Patrón',      prefix: 'PRE', icon: '', color: '#EF4444', unit: 'bar', description: 'Transductor de presión patrón de alta exactitud', extras: [] },
+  { category: 'electrical',  label: 'Calibrador de Proceso',   prefix: 'CAL', icon: '', color: '#8B5CF6', unit: 'V',  description: 'Calibrador multiparámetro de señales eléctricas', extras: [] },
+  { category: 'temperature', label: 'Sensor de Referencia T',  prefix: 'TMP', icon: '', color: '#06B6D4', unit: '°C', description: 'Termómetro/termohigrómetro de referencia trazable', extras: [] },
 ] as const;
 type StdCat = typeof STANDARD_CATEGORIES[number];
 
@@ -119,6 +119,19 @@ function ActionsCell({ std, onEdit, onDelete }: { std: Standard; onEdit: () => v
   );
 }
 
+/** Decodifica secuencias \uXXXX almacenadas literalmente en la BD (ej: ó → ó) */
+function decodeUnicode(s: string): string {
+  return s.replace(/\\u([0-9a-fA-F]{4})/gi, (_, hex) =>
+    String.fromCharCode(parseInt(hex, 16))
+  );
+}
+
+/** Elimina ceros decimales finales que genera el cast decimal:10 de Laravel (0.0000500000 → 0.00005) */
+function fmtNum(val: number | string | null | undefined): string {
+  const n = parseFloat(String(val ?? 0));
+  return isNaN(n) ? String(val ?? '') : String(n);
+}
+
 /* ─── Column Definitions ─────────────────────────────────── */
 function buildColumns(onEdit: (s: Standard) => void, onDelete: (s: Standard) => void): ColumnDef<Standard>[] {
   return [
@@ -135,8 +148,8 @@ function buildColumns(onEdit: (s: Standard) => void, onDelete: (s: Standard) => 
       accessorFn: row => `${row.name} ${row.brand ?? ''}`,
       cell: ({ row }) => (
         <div>
-          <p className="font-medium text-[11px]" style={{ color: 'var(--text-main)' }}>{row.original.name}</p>
-          {row.original.brand && <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{row.original.brand}{row.original.model ? ` · ${row.original.model}` : ''}</p>}
+          <p className="font-medium text-[11px]" style={{ color: 'var(--text-main)' }}>{decodeUnicode(row.original.name ?? '')}</p>
+          {row.original.brand && <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{decodeUnicode(row.original.brand)}{row.original.model ? ` · ${decodeUnicode(row.original.model ?? '')}` : ''}</p>}
         </div>
       ),
     },
@@ -162,7 +175,7 @@ function buildColumns(onEdit: (s: Standard) => void, onDelete: (s: Standard) => 
       accessorFn: row => Number(row.uncertainty_u),
       cell: ({ row }) => (
         <span className="font-mono text-[11px]" style={{ color: 'var(--text-main)' }}>
-          ±{row.original.uncertainty_u} <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>(k={row.original.k_factor})</span>
+          ±{fmtNum(row.original.uncertainty_u)} <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>(k={fmtNum(row.original.k_factor)})</span>
         </span>
       ),
     },
@@ -369,7 +382,7 @@ function StandardModal({ standard, standards, initialCategory = null, onClose }:
         <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
           <div>
             <h2 className="text-sm font-bold" style={{ color: 'var(--text-main)' }}>
-              {isEdit ? `✏️ Editar — ${standard.internal_code}` : selectedCat ? `${selectedCat.icon} Nuevo ${selectedCat.label}` : '🔬 Nuevo Patrón de Referencia'}
+              {isEdit ? `Editar — ${standard.internal_code}` : selectedCat ? `${selectedCat.icon} Nuevo ${selectedCat.label}` : 'Nuevo Patrón de Referencia'}
             </h2>
             <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
               {isEdit ? 'Modificar ficha del patrón de referencia' : selectedCat ? selectedCat.description : 'Selecciona el tipo de magnitud que mide este patrón'}
@@ -547,7 +560,7 @@ function Fld({ label, hint, error, children, className = '' }: { label: string; 
         {hint && <span className="normal-case tracking-normal font-normal opacity-70">— {hint}</span>}
       </label>
       {children}
-      {error && <p className="text-[10px] text-red-400">⚠ {error}</p>}
+      {error && <p className="text-[10px] text-red-400">{error}</p>}
     </div>
   );
 }

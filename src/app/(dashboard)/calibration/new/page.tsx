@@ -6,13 +6,13 @@ import Link from 'next/link';
 import api from '@/lib/api';
 import { isAxiosError } from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calculator, Send, Save, Loader2, Info, BookOpen, ChevronDown, AlertTriangle } from 'lucide-react';
+import { Calculator, Send, Save, Loader2, Info, BookOpen, ChevronDown, AlertTriangle, Play } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Instrument, Standard, GridSchema, BudgetPreview } from '@/types/calibration';
 import DynamicGrid, { type GridData } from '@/components/calibration/DynamicGrid';
 import { isSameCategory } from '@/lib/categoryUtils';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { C } from '@/lib/colors';
 const COLORS = { primary: C.primary, success: C.success };
@@ -30,9 +30,48 @@ const READONLY_META_FIELDS = new Set([
   'delta_alpha',           // physical constant (EURAMET cg-16)
 ]);
 
+const DRAFT_KEY = 'ndt_active_draft';
+
+/**
+ * Reconstructs the form's GridData map from a server raw_payload.
+ * Reverses buildPayload() so recovered sessions show their saved measurements.
+ */
+function rebuildGridData(rawPayload: Record<string, any>, grids: GridSchema[]): Record<string, GridData> {
+  const result: Record<string, GridData> = {};
+  for (const grid of grids) {
+    const rows: any[] = rawPayload[grid.id];
+    if (!Array.isArray(rows) || rows.length === 0) continue;
+    const gridData: GridData = {};
+    rows.forEach((row: any, i: number) => {
+      if (!row || typeof row !== 'object') return;
+      const rowData: Record<string, string> = {};
+      for (const col of grid.columns) {
+        if (col.computed) continue;
+        const val = row[col.key];
+        if (val === undefined || val === null) continue;
+        if (col.type === 'number_array' && Array.isArray(val)) {
+          // [{reading: v}, ...] vs flat [v1, v2, ...]
+          if (val.length > 0 && typeof val[0] === 'object' && val[0] !== null && 'reading' in val[0]) {
+            rowData[col.key] = val.map((v: any) => String(v.reading ?? '')).join(', ');
+          } else {
+            rowData[col.key] = val.map(String).join(', ');
+          }
+        } else if (typeof val === 'number') {
+          rowData[col.key] = String(val);
+        } else if (typeof val === 'string') {
+          rowData[col.key] = val;
+        }
+      }
+      if (Object.keys(rowData).length > 0) gridData[i] = rowData;
+    });
+    if (Object.keys(gridData).length > 0) result[grid.id] = gridData;
+  }
+  return result;
+}
 
 export default function NewCalibrationPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   // ─── Data from API (via Tanstack Query) ───
   const { data: instruments = [], isLoading: loadingInstruments } = useQuery<Instrument[]>({
@@ -76,8 +115,195 @@ export default function NewCalibrationPage() {
   const [budgetResult, setBudgetResult] = useState<BudgetPreview | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, Set<string>>>({});
 
-  // Reset form inputs whenever the selected instrument changes
+  // ─── Draft session state ───
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+  const [startingSession, setStartingSession] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // When true, the next selectedInstrument change came from draft recovery — skip the reset effect
+  const skipNextResetRef = useRef(false);
+  // Holds raw_payload from a recovered session; consumed once grids load so we can rebuild gridDataMap
+  const recoveryRawPayloadRef = useRef<Record<string, any> | null>(null);
+  const [gridRecoveryTrigger, setGridRecoveryTrigger] = useState(0);
+  // Tracks the last selectedInstrument value the reset effect has processed. Survives React
+  // StrictMode's double-mount in dev (which would otherwise consume a one-shot "initial mount"
+  // flag and trigger the reset before the recovery API responds).
+  const lastSeenInstrumentRef = useRef<string | null>(null);
+  // Guards against StrictMode double-running the recovery effect (would cause duplicate
+  // API calls, duplicate toasts and racing state writes).
+  const hasRunRecoveryRef = useRef(false);
+  // True while a draft is being restored from the server — blocks autosave from firing
+  // before gridDataMap is populated (otherwise an empty payload would overwrite the saved data).
+  const isRecoveringRef = useRef(false);
+
+  // Restore active draft from localStorage on page load (must be declared before the reset effect).
+  // Verifies via API that the session is still a mutable draft and within the 12-hour resumption window.
+  // The API is the authoritative source — localStorage only stores the sessionId pointer.
   useEffect(() => {
+    // StrictMode runs effects twice in dev — guard so the API is only called once
+    if (hasRunRecoveryRef.current) return;
+    hasRunRecoveryRef.current = true;
+
+    const stored = localStorage.getItem(DRAFT_KEY);
+    if (!stored) return;
+
+    let sessionId: number | null = null;
+    let storedCreatedAt: string | undefined;
+
+    try {
+      const parsed = JSON.parse(stored);
+      sessionId = parsed.sessionId ?? null;
+      storedCreatedAt = parsed.createdAt;
+    } catch {
+      localStorage.removeItem(DRAFT_KEY);
+      return;
+    }
+
+    if (!sessionId) {
+      localStorage.removeItem(DRAFT_KEY);
+      return;
+    }
+
+    const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+
+    // Quick pre-check: if the stored timestamp is already expired, skip the API call
+    if (storedCreatedAt && Date.now() - new Date(storedCreatedAt).getTime() > TWELVE_HOURS_MS) {
+      localStorage.removeItem(DRAFT_KEY);
+      toast.error(`El borrador de la sesión #${sessionId} expiró (más de 12 horas). Inicia una nueva calibración.`, { duration: 6000 });
+      return;
+    }
+
+    // Show immediate visual feedback while the API call is in flight
+    const recoveryToastId = toast.loading(`Restaurando borrador — Sesión #${sessionId}…`);
+    isRecoveringRef.current = true;
+
+    // Verify via API: session must exist, be mutable, and within the 12-hour window
+    api.get(`/calibration/sessions/${sessionId}`)
+      .then(res => {
+        const session = res.data;
+
+        // Session must still be editable
+        if (!session || !['draft', 'rejected'].includes(session.status)) {
+          localStorage.removeItem(DRAFT_KEY);
+          toast.dismiss(recoveryToastId);
+          isRecoveringRef.current = false;
+          const statusLabel = session?.status === 'approved' ? 'ya fue aprobada'
+            : session?.status === 'pending_review' ? 'está en revisión'
+            : 'no está disponible';
+          toast.error(`La sesión #${sessionId} ${statusLabel}. No se puede reanudar.`, { duration: 6000 });
+          return;
+        }
+
+        // The API is the source of truth for instrument_id — not localStorage
+        const apiInstrumentId = session.instrument_id ?? session.instrument?.id;
+        if (!apiInstrumentId) {
+          localStorage.removeItem(DRAFT_KEY);
+          toast.dismiss(recoveryToastId);
+          isRecoveringRef.current = false;
+          toast.error(`No se pudo recuperar el instrumento del borrador #${sessionId}.`, { duration: 6000 });
+          return;
+        }
+
+        // Use authoritative server timestamp to enforce the 12-hour limit
+        const serverAge = session.created_at
+          ? Date.now() - new Date(session.created_at).getTime()
+          : 0;
+
+        if (serverAge > TWELVE_HOURS_MS) {
+          localStorage.removeItem(DRAFT_KEY);
+          toast.dismiss(recoveryToastId);
+          isRecoveringRef.current = false;
+          toast.error(`El borrador de la sesión #${sessionId} expiró (más de 12 horas). Inicia una nueva calibración.`, { duration: 6000 });
+          return;
+        }
+
+        // Build environmental data: prefer raw_payload.metadata, fall back to session ambient fields
+        const meta: Record<string, string> = { ...(session.raw_payload?.metadata ?? {}) };
+        if (!meta.air_temperature && session.ambient_temperature != null)
+          meta.air_temperature = String(session.ambient_temperature);
+        if (!meta.humidity && session.ambient_humidity != null)
+          meta.humidity = String(session.ambient_humidity);
+        if (!meta.ambient_pressure && session.ambient_pressure != null)
+          meta.ambient_pressure = String(session.ambient_pressure);
+
+        const stds: any[] = session.standards ?? [];
+
+        // Count how many grid rows have data so the user knows the tables were restored
+        const rawPayload = session.raw_payload && typeof session.raw_payload === 'object'
+          ? session.raw_payload
+          : null;
+        let restoredRowCount = 0;
+        if (rawPayload) {
+          for (const key in rawPayload) {
+            if (key === 'metadata' || key === 'instrument_resolution') continue;
+            if (Array.isArray(rawPayload[key])) restoredRowCount += rawPayload[key].length;
+          }
+        }
+
+        // Store raw_payload so grids can be rebuilt once the schema loads
+        if (rawPayload) {
+          recoveryRawPayloadRef.current = rawPayload;
+          setGridRecoveryTrigger(t => t + 1);
+        }
+
+        // Valid — set skip flag then apply ALL state in one React 18 batch
+        skipNextResetRef.current = true;
+        setActiveSessionId(sessionId!);
+        setSelectedInstrument(String(apiInstrumentId));
+        setSelectedStandard(stds[0]?.id ? String(stds[0].id) : '');
+        setSelectedStandard2(stds[1]?.id ? String(stds[1].id) : '');
+        setEnvironmentalData(meta);
+        setCalibrationDate(
+          session.calibration_date
+            ? String(session.calibration_date).split('T')[0]
+            : new Date().toISOString().split('T')[0]
+        );
+        setNextCalibrationDate(
+          session.next_calibration_date
+            ? String(session.next_calibration_date).split('T')[0]
+            : ''
+        );
+        setTechnicianObservation(session.observation ?? '');
+        setTempUncertainty(String(session.ambient_temperature_uncertainty ?? '1.0'));
+
+        toast.dismiss(recoveryToastId);
+        const hoursLeft = Math.floor((TWELVE_HOURS_MS - serverAge) / 3600000);
+        const rowMsg = restoredRowCount > 0
+          ? ` con ${restoredRowCount} medicion${restoredRowCount === 1 ? '' : 'es'} restaurada${restoredRowCount === 1 ? '' : 's'}`
+          : '';
+        toast.success(`Borrador recuperado — Sesión #${sessionId}${rowMsg} (${hoursLeft}h restantes)`, { duration: 5500 });
+        // Release the autosave block after grids have been repopulated
+        setTimeout(() => { isRecoveringRef.current = false; }, 1500);
+      })
+      .catch(() => {
+        // Session not found or network error — discard the stale reference
+        localStorage.removeItem(DRAFT_KEY);
+        toast.dismiss(recoveryToastId);
+        isRecoveringRef.current = false;
+        toast.error(`No se pudo restaurar el borrador #${sessionId}. Verifica tu conexión.`, { duration: 5000 });
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset form whenever the user CHANGES the selected instrument. Uses a "last seen" ref
+  // instead of a one-shot "is initial mount" flag, so StrictMode's double-mount in dev
+  // doesn't accidentally trigger the reset before the recovery API responds.
+  useEffect(() => {
+    // First time we see this effect run: just record the initial value, don't reset
+    if (lastSeenInstrumentRef.current === null) {
+      lastSeenInstrumentRef.current = selectedInstrument;
+      return;
+    }
+    // StrictMode replay (or any re-run with the same value): skip
+    if (lastSeenInstrumentRef.current === selectedInstrument) return;
+    // The instrument actually changed — record the new value
+    lastSeenInstrumentRef.current = selectedInstrument;
+    // Draft recovery is applying state directly — don't clobber it
+    if (skipNextResetRef.current) {
+      skipNextResetRef.current = false;
+      return;
+    }
+    // Real user-driven change: clear everything tied to the previous instrument
     setBudgetResult(null);
     setGridDataMap({});
     setEnvironmentalData({});
@@ -86,6 +312,9 @@ export default function NewCalibrationPage() {
     setCalibrationDate(new Date().toISOString().split('T')[0]);
     setValidationErrors({});
     setSelectedStandard2('');
+    setActiveSessionId(null);
+    setLastSavedAt(null);
+    localStorage.removeItem(DRAFT_KEY);
   }, [selectedInstrument]);
 
 
@@ -117,9 +346,16 @@ export default function NewCalibrationPage() {
     ? standards.filter((s: Standard) => isSameCategory(s.category, selectedInst.category))
     : standards;
 
-  // Auto-preselect factory_standard when instrument changes
+  // Auto-preselect factory_standard when instrument changes (skipped when selection already valid)
   useEffect(() => {
     if (!selectedInst) return;
+
+    // If there is already a valid selection (e.g. recovered from draft), keep it
+    if (selectedStandard) {
+      const stillValid = filteredStandards.some(s => String(s.id) === selectedStandard);
+      if (stillValid) return;
+    }
+
     if (filteredStandards.length === 0) { setSelectedStandard(''); return; }
 
     // 1. Try to match factory_standard_id registered on the instrument
@@ -129,12 +365,9 @@ export default function NewCalibrationPage() {
     }
     // 2. Auto-select if only one standard matches the category
     if (filteredStandards.length === 1) { setSelectedStandard(String(filteredStandards[0].id)); return; }
-    // 3. Clear if currently selected standard no longer matches
-    if (selectedStandard) {
-      const stillValid = filteredStandards.some(s => String(s.id) === selectedStandard);
-      if (!stillValid) setSelectedStandard('');
-    }
-  }, [selectedInstrument, filteredStandards]);
+    // 3. Clear selection that no longer belongs to this instrument
+    setSelectedStandard('');
+  }, [selectedInstrument, filteredStandards]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-preload metadata fields from instrument + standard in DB ──────────
   // Runs whenever both instrument and standard are resolved (selectedInst/selectedStd change).
@@ -181,6 +414,17 @@ export default function NewCalibrationPage() {
 
   }, [selectedInst, selectedStd]);
 
+
+  // ─── Rebuild gridDataMap from server raw_payload once the procedure schema has loaded ───
+  // Fires when schema grids become available (after instrument is selected) OR when
+  // the recovery API call returns raw_payload (whichever arrives last).
+  useEffect(() => {
+    if (!recoveryRawPayloadRef.current || grids.length === 0) return;
+    const rawPayload = recoveryRawPayloadRef.current;
+    recoveryRawPayloadRef.current = null; // consume — only rebuild once
+    const recovered = rebuildGridData(rawPayload, grids);
+    if (Object.keys(recovered).length > 0) setGridDataMap(recovered);
+  }, [gridRecoveryTrigger, grids]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Grid data handler ───
   const handleGridChange = useCallback((gridId: string, data: GridData) => {
@@ -319,6 +563,67 @@ export default function NewCalibrationPage() {
        technicianObservation, selectedStandard, procedureCode, selectedStandard2,
        calibrationDate, nextCalibrationDate]);
 
+  // ─── Validate Step 1 (instrument + standard + schema) ───
+  const validateStep1 = useCallback((): boolean => {
+    if (!selectedInstrument) { toast.error('Seleccione un instrumento'); return false; }
+    if (!selectedStandard)   { toast.error('Seleccione un patrón de referencia'); return false; }
+    if (procedureCode === 'M-LAB-01' && !selectedStandard2) {
+      toast.error('M-LAB-01 requiere un segundo patrón de Humedad Relativa');
+      return false;
+    }
+    if (!matchedSchema) { toast.error('El esquema del procedimiento no está disponible'); return false; }
+    return true;
+  }, [selectedInstrument, selectedStandard, procedureCode, selectedStandard2, matchedSchema]);
+
+  // ─── Start calibration: create draft session immediately ───
+  const handleStartSession = async () => {
+    if (!validateStep1()) return;
+    setStartingSession(true);
+    try {
+      const res = await api.post('/calibration/sessions', buildSessionBody());
+      const newSessionId: number = res.data.session_id;
+      setActiveSessionId(newSessionId);
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        sessionId: newSessionId,
+        createdAt: new Date().toISOString(),
+      }));
+      // Bust the session list cache so the Borradores tab shows the new draft immediately
+      queryClient.invalidateQueries({ queryKey: ['calibrationSessions'] });
+      toast.success(`Borrador iniciado — Sesión #${newSessionId}`);
+    } catch (err: unknown) {
+      const msg = isAxiosError(err) ? (err.response?.data?.message || 'Error iniciando borrador') : 'Error iniciando borrador';
+      toast.error(msg);
+    } finally {
+      setStartingSession(false);
+    }
+  };
+
+  // ─── Auto-save: debounced PUT whenever grid data changes (2 s debounce) ───
+  const triggerAutoSave = useCallback(() => {
+    if (!activeSessionId) return;
+    // While restoring a draft from the server, skip autosave so we don't overwrite
+    // the saved payload with a partially-populated form mid-recovery.
+    if (isRecoveringRef.current) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(async () => {
+      setAutoSaving(true);
+      try {
+        await api.put(`/calibration/sessions/${activeSessionId}`, { raw_payload: buildPayload() });
+        setLastSavedAt(new Date());
+      } catch {
+        // Silent fail — user can still manually save
+      } finally {
+        setAutoSaving(false);
+      }
+    }, 2000);
+  }, [activeSessionId, buildPayload]);
+
+  useEffect(() => {
+    if (!activeSessionId || Object.keys(gridDataMap).length === 0) return;
+    triggerAutoSave();
+    return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
+  }, [gridDataMap]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Validate required fields ───
   const validateFields = useCallback((): boolean => {
     if (!selectedInstrument) { toast.error('Seleccione un instrumento'); return false; }
@@ -379,7 +684,7 @@ export default function NewCalibrationPage() {
     return true;
   }, [selectedInstrument, selectedStandard, environmentalData, matchedSchema, grids, gridDataMap, nextCalibrationDate, calibrationDate]);
 
-  // ─── Save as draft ───  
+  // ─── Save as draft ───
   const handleSaveDraft = async () => {
     if (!selectedInstrument || !selectedStandard || !matchedSchema) {
       toast.error('Seleccione instrumento y patrón primero');
@@ -389,15 +694,21 @@ export default function NewCalibrationPage() {
     setSaving(true);
     try {
       const payload = buildPayload();
-      const res = await api.post('/calibration/sessions', buildSessionBody());
+      let sessionId = activeSessionId;
 
-      if (res.data.session_id) {
-        await api.put(`/calibration/sessions/${res.data.session_id}`, {
-          raw_payload: payload,
-        });
+      if (!sessionId) {
+        const res = await api.post('/calibration/sessions', buildSessionBody());
+        sessionId = res.data.session_id;
+        setActiveSessionId(sessionId);
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+          sessionId,
+          createdAt: new Date().toISOString(),
+        }));
       }
 
-      toast.success(`Borrador guardado (Sesión #${res.data.session_id})`);
+      await api.put(`/calibration/sessions/${sessionId}`, { raw_payload: payload });
+      setLastSavedAt(new Date());
+      toast.success(`Borrador guardado (Sesión #${sessionId})`);
     } catch (err: unknown) {
       const msg = isAxiosError(err) ? (err.response?.data?.message || 'Error guardando borrador') : 'Error guardando borrador';
       toast.error(msg);
@@ -419,18 +730,19 @@ export default function NewCalibrationPage() {
     try {
       const payload = buildPayload();
 
-      // 1. Create session as draft
-      const createRes = await api.post('/calibration/sessions', buildSessionBody());
+      let sessionId = activeSessionId;
+      if (!sessionId) {
+        const createRes = await api.post('/calibration/sessions', buildSessionBody());
+        sessionId = createRes.data.session_id;
+        setActiveSessionId(sessionId);
+      }
 
-      const sessionId = createRes.data.session_id;
-
-      // 2. Submit with raw_payload to trigger Strategy calculation
-      const submitRes = await api.post(`/calibration/sessions/${sessionId}/submit`, {
-        raw_payload: payload,
-      });
+      const submitRes = await api.post(`/calibration/sessions/${sessionId}/submit`, { raw_payload: payload });
 
       setBudgetResult(submitRes.data.budget_preview);
-      toast.success(`✅ Sesión #${sessionId} procesada y enviada a revisión`);
+      localStorage.removeItem(DRAFT_KEY);
+      setActiveSessionId(null);
+      toast.success(`Sesión #${sessionId} procesada y enviada a revisión`);
     } catch (err: unknown) {
       const msg = isAxiosError(err)
         ? (err.response?.data?.message || err.response?.data?.error || 'Error procesando calibración')
@@ -531,8 +843,8 @@ export default function NewCalibrationPage() {
             const isGridStep = !!(step as any).gridStep;
             const isAvailable =
               idx === 0 ||
-              (isGridStep && !!matchedSchema && !!selectedInstrument && !!selectedStandard) ||
-              (!isGridStep && !isResultStep && !!matchedSchema && !!selectedInstrument && !!selectedStandard) ||
+              (isGridStep && !!activeSessionId && !!matchedSchema) ||
+              (!isGridStep && !isResultStep && !!activeSessionId && !!matchedSchema) ||
               (isResultStep && !!budgetResult);
             return (
               <div key={step.id} className="flex items-center flex-1 min-w-0">
@@ -812,7 +1124,7 @@ export default function NewCalibrationPage() {
                   .some((r: any) => r.readonly || READONLY_META_FIELDS.has(r.field)) && (
                   <div className="mt-4 pt-3" style={{ borderTop: '1px dashed var(--border-color)' }}>
                     <p className="text-[9px] uppercase tracking-widest font-semibold mb-2 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
-                      <span>🔒</span>
+                      
                       Datos del patrón e instrumento — cargados automáticamente desde base de datos
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
@@ -937,6 +1249,60 @@ export default function NewCalibrationPage() {
                   <span>La Strategy de cálculo para <strong>{procedureCode}</strong> aún no está implementada en el backend. Podrá llenar las tablas y guardar como borrador, pero el envío a revisión no está disponible.</span>
                 </div>
               )}
+
+              {/* ── Iniciar Calibración / Session status indicator ── */}
+              <div className="mt-5 pt-4 flex items-center justify-between" style={{ borderTop: '1px solid var(--border-color)' }}>
+                {activeSessionId ? (
+                  <div className="flex items-center gap-3 w-full">
+                    <div className="flex items-center gap-2 flex-1">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'var(--brand-success)' }} />
+                      <span className="text-[11px] font-medium" style={{ color: 'var(--brand-success)' }}>
+                        Sesión #{activeSessionId} en curso
+                      </span>
+                      {autoSaving && (
+                        <span className="text-[10px] flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+                          <Loader2 size={10} className="animate-spin" /> Guardando...
+                        </span>
+                      )}
+                      {!autoSaving && lastSavedAt && (
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          · Guardado {lastSavedAt.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setActiveSessionId(null);
+                        setLastSavedAt(null);
+                        setSelectedInstrument('');
+                        setBudgetResult(null);
+                        setGridDataMap({});
+                        setEnvironmentalData({});
+                        setNextCalibrationDate('');
+                        setTempUncertainty('1.0');
+                        setCalibrationDate(new Date().toISOString().split('T')[0]);
+                        setValidationErrors({});
+                        localStorage.removeItem(DRAFT_KEY);
+                      }}
+                      className="text-[10px] px-3 py-1.5 rounded font-medium transition-colors hover:opacity-90"
+                      style={{ color: '#EF4444', border: '1px solid #EF444460', backgroundColor: '#EF444412' }}
+                    >
+                      Cancelar borrador
+                    </button>
+                  </div>
+                ) : (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    onClick={handleStartSession}
+                    disabled={startingSession || !selectedInstrument || !selectedStandard || !matchedSchema}
+                    className="h-10 px-6 rounded-md text-xs font-semibold text-white shadow-md flex items-center gap-2 transition-colors disabled:opacity-40"
+                    style={{ backgroundColor: C.accent }}
+                  >
+                    {startingSession ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+                    Iniciar Calibración
+                  </motion.button>
+                )}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -946,7 +1312,7 @@ export default function NewCalibrationPage() {
       {/* ═══ PASO 2: TABLAS DINÁMICAS DE MEDICIÓN ══════════  */}
       {/* ══════════════════════════════════════════════════════ */}
       <AnimatePresence>
-        {matchedSchema && selectedInstrument && selectedStandard && !loadingSchema && (
+        {activeSessionId && matchedSchema && !loadingSchema && (
           <motion.div id="cal-section-step2" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
             className="panel rounded-md shadow-sm p-5 w-full">
             <h3 className="text-sm font-semibold mb-5 flex items-center gap-2" style={{ color: 'var(--text-main)' }}>
@@ -1190,7 +1556,7 @@ function UnifiedResultsTable({
             <div key={funcKey}>
               <p className="text-[11px] font-bold uppercase tracking-widest mb-2"
                 style={{ color: 'var(--text-muted)' }}>
-                📐 {funcLabels[funcKey] ?? funcKey}
+                {funcLabels[funcKey] ?? funcKey}
               </p>
               <VernierFunctionTable points={funcPoints} showBudget={false} />
             </div>

@@ -57,7 +57,7 @@ export function useTutorial(pathname: string) {
         steps: driverSteps,
         nextBtnText: 'Siguiente →',
         prevBtnText: '← Anterior',
-        doneBtnText: '✓ Finalizar',
+        doneBtnText: 'Finalizar',
         progressText: '{{current}} de {{total}}',
         popoverClass: mode === 'extended' ? 'ndt-tour-extended' : 'ndt-tour-quick',
         stagePadding: 6,

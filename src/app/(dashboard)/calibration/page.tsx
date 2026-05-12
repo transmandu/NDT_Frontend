@@ -4,13 +4,20 @@ import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
-import { Eye, Download, Loader2, FileCheck, AlertCircle } from 'lucide-react';
+import { Eye, Download, Loader2, FileCheck, AlertCircle, Play, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CalibrationReview from '@/components/calibration/CalibrationReview';
 import toast from 'react-hot-toast';
 
 import { C } from '@/lib/colors';
 const COLORS = { primary: C.primary, success: C.success, warning: C.warning, danger: C.danger };
+
+const DRAFT_KEY = 'ndt_active_draft';
+const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+
+function isDraftResumable(createdAt: string): boolean {
+  return Date.now() - new Date(createdAt).getTime() < TWELVE_HOURS_MS;
+}
 
 const statusLabels: Record<string, string> = {
   draft: 'Borrador', pending_review: 'En Revisión', approved: 'Aprobado', rejected: 'Rechazado',
@@ -23,6 +30,8 @@ export default function CalibrationPage() {
   const [activeTab, setActiveTab] = useState<'pending' | 'drafts' | 'rejected' | 'issued'>('pending');
   const [reviewingId, setReviewingId] = useState<number | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -67,6 +76,27 @@ export default function CalibrationPage() {
       toast.error('No se pudo descargar el certificado');
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  const handleDeleteDraft = async (id: number) => {
+    if (!window.confirm(`Eliminar borrador CS-${id}? Esta accion no se puede deshacer.`)) return;
+    setDeletingId(id);
+    try {
+      await api.delete(`/calibration/sessions/${id}`);
+      queryClient.invalidateQueries({ queryKey: ['calibrationSessions'] });
+      const stored = localStorage.getItem(DRAFT_KEY);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed.sessionId === id) localStorage.removeItem(DRAFT_KEY);
+        } catch { /* ignore */ }
+      }
+      toast.success(`Borrador CS-${id} eliminado`);
+    } catch {
+      toast.error('No se pudo eliminar el borrador');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -120,7 +150,7 @@ export default function CalibrationPage() {
                   <tr key={s.id} className="td-theme hover-bg transition-colors">
                     <td className="px-4 py-3 font-mono font-medium">CS-{s.id}</td>
                     <td className="px-4 py-3">{s.instrument?.name || `Inst #${s.instrument_id}`}</td>
-                    <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>{s.technician?.name || 'â€”'}</td>
+                    <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>{s.technician?.name || 'â€"'}</td>
                     <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>{new Date(s.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => setReviewingId(s.id)}
@@ -136,7 +166,7 @@ export default function CalibrationPage() {
           </table>
         </div>
       ) : activeTab === 'drafts' ? (
-        /* â”€â”€ BORRADORES â”€â”€ */
+        /* â"€â"€ BORRADORES â"€â"€ */
         <div className="panel rounded-md shadow-sm overflow-x-auto w-full">
           <table className="w-full text-left text-xs min-w-[600px]">
             <thead>
@@ -158,27 +188,62 @@ export default function CalibrationPage() {
               ) : drafts.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-8 text-center text-[11px]" style={{ color: 'var(--text-muted)' }}>No hay borradores guardados</td></tr>
               ) : (
-                drafts.map((s: any) => (
+                drafts.map((s: any) => {
+                  const resumable = s.created_at && isDraftResumable(s.created_at);
+                  return (
                   <tr key={s.id} className="td-theme hover-bg transition-colors">
                     <td className="px-4 py-3 font-mono font-medium">CS-{s.id}</td>
                     <td className="px-4 py-3">{s.instrument?.name || `Inst #${s.instrument_id}`}</td>
-                    <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>{s.technician?.name || 'â€”'}</td>
+                    <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>{s.technician?.name || '—'}</td>
                     <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>{new Date(s.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right flex items-center justify-end gap-2">
+                      {resumable ? (
+                        <button
+                          onClick={() => {
+                            localStorage.setItem(DRAFT_KEY, JSON.stringify({
+                              sessionId: s.id,
+                              createdAt: s.created_at,
+                            }));
+                            router.push('/calibration/new');
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded text-[11px] font-medium h-7 px-3 transition-colors text-white"
+                          style={{ backgroundColor: COLORS.success }}>
+                          <Play size={12} /> Reanudar
+                        </button>
+                      ) : (
+                        <>
+                          <span
+                            className="inline-flex items-center gap-1 rounded text-[10px] font-medium h-6 px-2"
+                            style={{ backgroundColor: COLORS.warning + '20', color: COLORS.warning, border: `1px solid ${COLORS.warning}40` }}>
+                            Expirado
+                          </span>
+                          <button
+                            onClick={() => handleDeleteDraft(s.id)}
+                            disabled={deletingId === s.id}
+                            className="inline-flex items-center justify-center rounded h-7 w-7 transition-colors"
+                            style={{ backgroundColor: COLORS.danger + '15', color: COLORS.danger, border: `1px solid ${COLORS.danger}30` }}
+                            title="Eliminar borrador">
+                            {deletingId === s.id
+                              ? <Loader2 size={13} className="animate-spin" />
+                              : <Trash2 size={13} />}
+                          </button>
+                        </>
+                      )}
                       <button onClick={() => router.push(`/calibration/${s.id}`)}
-                        className="inline-flex items-center gap-1.5 rounded text-[11px] font-medium h-7 px-3 transition-colors text-white"
-                        style={{ backgroundColor: C.accent }}>
-                        <Eye size={14} /> Ver Borrador
+                        className="inline-flex items-center gap-1.5 rounded text-[11px] font-medium h-7 px-3 transition-colors"
+                        style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}>
+                        <Eye size={14} />
                       </button>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       ) : activeTab === 'rejected' ? (
-        /* â”€â”€ RECHAZADAS â”€â”€ */
+        /* â"€â"€ RECHAZADAS â"€â"€ */
         <div className="panel rounded-md shadow-sm overflow-x-auto w-full">
           <table className="w-full text-left text-xs min-w-[600px]">
             <thead>
@@ -204,8 +269,8 @@ export default function CalibrationPage() {
                   <tr key={s.id} className="td-theme hover-bg transition-colors">
                     <td className="px-4 py-3 font-mono font-medium">CS-{s.id}</td>
                     <td className="px-4 py-3">{s.instrument?.name || `Inst #${s.instrument_id}`}</td>
-                    <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>{s.technician?.name || 'â€”'}</td>
-                    <td className="px-4 py-3 max-w-[200px] truncate" style={{ color: COLORS.danger }} title={s.observation}>{s.observation || 'â€”'}</td>
+                    <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>{s.technician?.name || 'â€"'}</td>
+                    <td className="px-4 py-3 max-w-[200px] truncate" style={{ color: COLORS.danger }} title={s.observation}>{s.observation || 'â€"'}</td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => router.push(`/calibration/${s.id}`)}
                         className="inline-flex items-center gap-1.5 rounded text-[11px] font-medium h-7 px-3 transition-colors"
@@ -280,13 +345,13 @@ export default function CalibrationPage() {
                       {cert.conforms === true && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold"
                           style={{ backgroundColor: '#10b98115', color: '#10b981', border: '1px solid #10b98130' }}>
-                          ✓ Conforme
+                          Conforme
                         </span>
                       )}
                       {cert.conforms === false && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold"
                           style={{ backgroundColor: `${COLORS.danger}15`, color: COLORS.danger, border: `1px solid ${COLORS.danger}30` }}>
-                          ✗ No Conforme
+                          No Conforme
                         </span>
                       )}
                       {cert.conforms === null && (

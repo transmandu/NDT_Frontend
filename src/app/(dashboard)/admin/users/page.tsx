@@ -216,14 +216,14 @@ function UserModal({ user, onClose, onSave, saving }: {
             <div className="space-y-1.5">
               <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Nombre Completo *</label>
               <input {...register('name')} className="field-input w-full" placeholder="Juan Pérez" />
-              {errors.name && <p className="text-[10px] text-red-400">⚠ {errors.name.message}</p>}
+              {errors.name && <p className="text-[10px] text-red-400">{errors.name.message}</p>}
             </div>
 
             {/* Email */}
             <div className="space-y-1.5">
               <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Correo Electrónico *</label>
               <input {...register('email')} type="email" className="field-input w-full font-mono" placeholder="usuario@lab.com" />
-              {errors.email && <p className="text-[10px] text-red-400">⚠ {errors.email.message}</p>}
+              {errors.email && <p className="text-[10px] text-red-400">{errors.email.message}</p>}
             </div>
 
             {/* Role */}
@@ -234,7 +234,7 @@ function UserModal({ user, onClose, onSave, saving }: {
                 <option value="auditor">Auditor — aprueba / rechaza</option>
                 <option value="admin">Administrador — acceso total</option>
               </select>
-              {errors.role && <p className="text-[10px] text-red-400">⚠ {errors.role.message}</p>}
+              {errors.role && <p className="text-[10px] text-red-400">{errors.role.message}</p>}
             </div>
 
             {/* Password */}
@@ -251,7 +251,7 @@ function UserModal({ user, onClose, onSave, saving }: {
                   {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>
-              {errors.password && <p className="text-[10px] text-red-400">⚠ {errors.password.message}</p>}
+              {errors.password && <p className="text-[10px] text-red-400">{errors.password.message}</p>}
             </div>
 
             {/* Confirm Password */}
@@ -259,7 +259,7 @@ function UserModal({ user, onClose, onSave, saving }: {
               <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Confirmar Contraseña</label>
               <input {...register('password_confirmation')} type={showPwd ? 'text' : 'password'}
                 className="field-input w-full" placeholder="········" />
-              {errors.password_confirmation && <p className="text-[10px] text-red-400">⚠ {errors.password_confirmation.message}</p>}
+              {errors.password_confirmation && <p className="text-[10px] text-red-400">{errors.password_confirmation.message}</p>}
             </div>
           </div>
 

@@ -17,13 +17,13 @@ import { C } from '@/lib/colors';
 const ACCENT = C.accent; // índigo — color de "esquemas"
 
 const CATEGORIES = [
-  { value: 'dimensional',  label: '📐 Dimensional' },
-  { value: 'mass',         label: '⚖️ Masa' },
-  { value: 'torque',       label: '🔧 Torque' },
-  { value: 'pressure',     label: '🌡️ Presión' },
-  { value: 'electrical',   label: '🔌 Eléctrico' },
-  { value: 'temperature',  label: '💧 Temperatura / Humedad' },
-  { value: 'other',        label: '⚙️ Otro' },
+  { value: 'dimensional',  label: 'Dimensional' },
+  { value: 'mass',         label: 'Masa' },
+  { value: 'torque',       label: 'Torque' },
+  { value: 'pressure',     label: 'Presión' },
+  { value: 'electrical',   label: 'Eléctrico' },
+  { value: 'temperature',  label: 'Temperatura / Humedad' },
+  { value: 'other',        label: 'Otro' },
 ];
 
 /* ─── Zod schema ───────────────────────────────────────────── */
@@ -53,7 +53,7 @@ function validateUiSchema(raw: string): { ok: boolean; message: string } {
       if (!g.title)   return { ok: false, message: `Grid "${g.id}" sin "title"` };
       if (!Array.isArray(g.columns) || g.columns.length === 0) return { ok: false, message: `Grid "${g.id}" sin "columns"` };
     }
-    return { ok: true, message: `✓ Válido · ${parsed.grids.length} grid(s) · ${parsed.metadata_requirements.length} campo(s) de metadata` };
+    return { ok: true, message: `Válido · ${parsed.grids.length} grid(s) · ${parsed.metadata_requirements.length} campo(s) de metadata` };
   } catch (e: any) {
     return { ok: false, message: e.message };
   }
@@ -61,7 +61,7 @@ function validateUiSchema(raw: string): { ok: boolean; message: string } {
 
 function validateOptionalJson(raw: string): { ok: boolean; message: string } {
   if (!raw || raw.trim() === '' || raw.trim() === 'null') return { ok: true, message: 'Vacío (se guardará null)' };
-  try { JSON.parse(raw); return { ok: true, message: '✓ JSON válido' }; }
+  try { JSON.parse(raw); return { ok: true, message: 'JSON válido' }; }
   catch (e: any) { return { ok: false, message: e.message }; }
 }
 
@@ -72,7 +72,7 @@ function Field({ label, error, children, hint }: { label: string; error?: string
       <label className="text-[10px] font-semibold uppercase tracking-wider block" style={{ color: 'var(--text-muted)' }}>{label}</label>
       {children}
       {hint && !error && <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{hint}</p>}
-      {error && <p className="text-[10px] text-red-400 flex items-center gap-1">⚠ {error}</p>}
+      {error && <p className="text-[10px] text-red-400 flex items-center gap-1">{error}</p>}
     </div>
   );
 }
@@ -274,12 +274,11 @@ export default function SchemaModal({
         <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
           <div>
             <h2 className="text-sm font-bold flex items-center gap-2" style={{ color: 'var(--text-main)' }}>
-              <span className="text-lg">📋</span>
               {isEdit ? `Editar Esquema — ${schema.code}` : 'Nuevo Esquema de Procedimiento'}
             </h2>
             <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
               {isEdit
-                ? `v${schema.version} · ${schema.category}${hasStrategy ? ' · ✅ Estrategia implementada' : ' · ⚠️ Sin estrategia matemática'}`
+                ? `v${schema.version} · ${schema.category}${hasStrategy ? ' · Estrategia implementada' : ' · Sin estrategia matemática'}`
                 : 'Define el código, nombre, categoría y el JSON de la interfaz de usuario'}
             </p>
           </div>
@@ -357,7 +356,7 @@ export default function SchemaModal({
                 {/* Info card */}
                 <div className="p-3 rounded-lg text-[10px] leading-relaxed space-y-1"
                   style={{ backgroundColor: `${ACCENT}08`, border: `1px solid ${ACCENT}25`, color: 'var(--text-muted)' }}>
-                  <p className="font-semibold" style={{ color: ACCENT }}>💡 Flujo de configuración</p>
+                  <p className="font-semibold" style={{ color: ACCENT }}>Flujo de configuración</p>
                   <p>1. Completa los campos de esta pestaña para identificar el procedimiento.</p>
                   <p>2. Ve a <strong>Configuración JSON</strong> para definir el <code>ui_schema</code> (grids de medición) y el <code>math_config</code> (parámetros del motor de cálculo).</p>
                   <p>3. El código debe coincidir con el <code>procedure_code</code> dentro del <code>ui_schema</code>.</p>
@@ -392,7 +391,7 @@ export default function SchemaModal({
           <div className="px-6 py-4 flex items-center justify-between shrink-0"
             style={{ borderTop: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}>
             <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-              {errors.ui_schema_raw && <span className="text-red-400">⚠ Verifica el UI Schema en la pestaña JSON</span>}
+              {errors.ui_schema_raw && <span className="text-red-400">Verifica el UI Schema en la pestaña JSON</span>}
             </p>
             <div className="flex items-center gap-3">
               <button type="button" onClick={onClose}

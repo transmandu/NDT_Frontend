@@ -183,13 +183,13 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
           {session.status === 'approved' && (
             <span className="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest"
               style={{ backgroundColor: '#10B98115', color: '#10B981', border: '1px solid #10B98130' }}>
-              ✓ Aprobado
+              Aprobado
             </span>
           )}
           {session.status === 'rejected' && (
             <span className="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest"
               style={{ backgroundColor: `${COLORS.danger}15`, color: COLORS.danger, border: `1px solid ${COLORS.danger}30` }}>
-              ✗ Rechazado
+              Rechazado
             </span>
           )}
           {isPending && (

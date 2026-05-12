@@ -20,15 +20,19 @@ const viewInfo: Record<string, { title: string; subtitle: string; autoSave?: boo
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, _hasHydrated } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   useEffect(() => {
-    if (!isAuthenticated) router.replace('/login');
-  }, [isAuthenticated, router]);
+    if (_hasHydrated && !isAuthenticated) router.replace('/login');
+  }, [_hasHydrated, isAuthenticated, router]);
 
+  // Don't render until the auth store has hydrated from sessionStorage.
+  // Without this guard, the initial render (where isAuthenticated is still false)
+  // would incorrectly redirect to /login on every page reload (F5).
+  if (!_hasHydrated) return null;
   if (!isAuthenticated) return null;
 
   const currentView = Object.keys(viewInfo).sort((a, b) => b.length - a.length).find(k => pathname.startsWith(k)) || '/dashboard';
