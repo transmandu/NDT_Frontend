@@ -18,22 +18,92 @@ export interface UncertaintySource {
   note?: string;
 }
 
+/**
+ * Magnitude/category strings emitted by the backend (`ProcedureSchema.category`
+ * and `Instrument.category`). They are in Spanish and correspond to physical
+ * magnitudes, not instrument types.
+ */
+export type InstrumentCategory =
+  | 'presion'      // → manómetros
+  | 'masa'         // → balanzas
+  | 'temperatura'  // → termohigrómetros (canal T)
+  | 'humedad'      // → termohigrómetros (canal HR)
+  | 'electrica'    // → multímetros
+  | 'torque'       // → torquímetros
+  | 'dimensional'; // → vernier / pie de rey
+
+/**
+ * Logical table shape used by the audit results view. Many physical categories
+ * collapse onto the same table layout (e.g. temperatura/humedad → thermohygrometer).
+ */
+export type ResultsTableType =
+  | 'manometer'
+  | 'balance'
+  | 'thermohygrometer'
+  | 'multimeter'
+  | 'torquemeter'
+  | 'vernier'
+  | 'generic'; // safe fallback for unknown procedures
+
 export interface BudgetPoint {
+  /* Identification */
   nominal_value?: number;
   nominal_length_mm?: number;
   nominal?: number;
   nominal_bar?: number;
   point_g?: number;
+  function?: string;
+  unit?: string;
+
+  /* Measured / derived values */
+  mean?: number;
+  mean_mm?: number;
+  mean_reading?: number;
+  average_measured?: number;
+  mean_reference?: number;
+  std_deviation?: number;
+  std_deviation_um?: number;
+  n_readings?: number;
+
+  /* Error variants */
   error?: number;
+  error_ascending?: number;
   error_descending?: number;
+  absolute_error?: number;
+  relative_error_pct?: number;
   hysteresis?: number;
-  expanded_uncertainty_mm?: number;
-  expanded_u?: number;
+  correction?: number;
+
+  /* Multimeter-specific */
+  range?: number;
+  ac_frequency_hz?: number;
+  offset_correction?: number;
+  corrected_mean?: number;
+  has_zero_reading?: boolean;
+
+  /* Manometer-specific */
+  mean_instrument_asc?: number;
+  mean_standard_asc?: number;
+  hydrostatic_correction_applied?: boolean;
+  hydrostatic_delta?: number;
+
+  /* GUM result */
+  combined_uncertainty?: number;
   combined_uncertainty_mm?: number;
+  combined_uncertainty_um?: number;
+  expanded_uncertainty?: number;
+  expanded_uncertainty_mm?: number;
+  expanded_uncertainty_um?: number;
+  expanded_uncertainty_pct?: number;
+  expanded_u?: number;
   k_factor?: number;
   effective_dof?: number;
-  mean?: number;
-  average_measured?: number;
+
+  /* Traceability and conformity */
+  standard_used?: { name?: string; cert?: string; U?: number; k?: number };
+  conformity_statement?: string | null;
+
+  /* Legacy fields kept for compatibility */
   instrument?: number;
   instrument_bar?: number;
   uncertainty_sources?: UncertaintySource[];
@@ -164,8 +234,39 @@ export interface Instrument {
   category: string;
   range_min: number | null;
   range_max: number | null;
+  /** Máximo Error Permitido (EMP) — usado para evaluar conformidad ISO 17025 §7.8.6. */
+  emp: number | null;
+  calibration_interval_months?: number | null;
   location: string | null;
   status: string;
+}
+
+/**
+ * Frozen snapshot of a Standard's metrological data at session-creation time.
+ * Lives on the `calibration_session_standards` pivot under `snapshot_data`
+ * (see Standard::toSnapshot() in the backend). Used so the audit view shows
+ * exactly the values that were in effect when the calibration was performed,
+ * even if the standard's record is later updated.
+ */
+export interface StandardSnapshot {
+  id?: number;
+  internal_code?: string;
+  name?: string;
+  brand?: string | null;
+  model?: string | null;
+  serial_number?: string | null;
+  certificate_number?: string;
+  unit?: string | null;
+  resolution?: number | null;
+  uncertainty_u?: number;
+  k_factor?: number;
+  uncertainty_slope?: number | null;
+  drift_rate_per_year?: number | null;
+  oiml_class?: string | null;
+  mass_density?: number | null;
+  calibration_date?: string | null;
+  expiry_date?: string | null;
+  calibrated_by_lab?: string | null;
 }
 
 export interface Standard {
@@ -192,6 +293,12 @@ export interface Standard {
   uncertainty_slope: number | null;    // Dimensional: b in U=a+b·L
   created_at?: string;
   updated_at?: string;
+  /**
+   * Pivot data carried by `session.standards` when loaded through the
+   * `calibration_session_standards` many-to-many. The `snapshot_data` JSON
+   * holds the frozen metrological state used during the calibration.
+   */
+  pivot?: { snapshot_data?: StandardSnapshot | null };
 }
 
 export interface ProcedureSchema {

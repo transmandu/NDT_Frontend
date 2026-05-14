@@ -19,13 +19,20 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
-import type { CalibrationSession, UncertaintySource } from '@/types/calibration';
-
-type BudgetPointWithFunction = {
-  function?: string;
-  uncertainty_sources?: UncertaintySource[];
-  [key: string]: unknown;
-};
+import type {
+  CalibrationSession,
+  Instrument,
+  Standard,
+  StandardSnapshot,
+  UncertaintySource,
+} from '@/types/calibration';
+import { formatMeasured, formatUncertainty } from '@/lib/metrologyFormat';
+import { MathText, DegreesOfFreedom } from '@/components/calibration/MathText';
+import {
+  RESULT_COLUMNS,
+  resolveTableType,
+  type BudgetPointWithFunction,
+} from '@/components/calibration/resultsTableConfig';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/stores/authStore';
 import {
@@ -126,7 +133,9 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
       const flat: BudgetPointWithFunction[] = [];
       for (const [funcKey, points] of Object.entries(source.functions)) {
         for (const pt of points) {
-          flat.push({ ...pt, function: funcKey });
+          // Preserve the strategy-emitted function when present (e.g. thermohygrometer
+          // emits 'Temperatura'/'Humedad' inside the point itself, not as the grouping key).
+          flat.push({ ...pt, function: pt.function ?? funcKey });
         }
       }
       return flat;
@@ -134,6 +143,18 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
     if (source.points) return source.points;
     return [];
   })();
+
+  /* ── Resolve table layout and primary unit from the session ── */
+  const tableType = resolveTableType(
+    (session?.procedure_schema?.category ?? session?.category) as string | undefined,
+    session?.procedure_schema?.code,
+  );
+  const tableUnit =
+    session?.calculated_results?.unit ||
+    session?.final_results?.unit ||
+    session?.instrument?.unit ||
+    '';
+  const tableResolution = session?.instrument?.resolution ?? null;
 
   const hasDetailedSources = allResults.some(
     r => (r.uncertainty_sources?.length ?? 0) > 0
@@ -226,12 +247,57 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div><p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Equipo Calibrado</p><p className="text-xs font-medium">{session.instrument?.internal_code} ({session.instrument?.name})</p></div>
             <div><p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Procedimiento</p><p className="text-xs font-medium">{session.procedure_schema?.code || '—'}</p></div>
-            <div><p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Temperatura Amb.</p><p className="text-xs font-medium font-mono">{session.ambient_temperature} °C</p></div>
+            <div>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Temperatura Amb.</p>
+              <p className="text-xs font-medium font-mono">
+                {session.ambient_temperature} °C
+                {session.ambient_temperature_uncertainty != null && (
+                  <span className="ml-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    ± {session.ambient_temperature_uncertainty}
+                  </span>
+                )}
+              </p>
+            </div>
             <div><p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Humedad Relativa</p><p className="text-xs font-medium font-mono">{session.ambient_humidity} %</p></div>
+            <div>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Presión Amb.</p>
+              <p className="text-xs font-medium font-mono">
+                {session.ambient_pressure != null ? `${session.ambient_pressure} hPa` : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Fecha de Calibración</p>
+              <p className="text-xs font-medium font-mono">
+                {session.calibration_date
+                  ? new Date(session.calibration_date).toLocaleDateString('es')
+                  : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Próxima Calibración</p>
+              <p className="text-xs font-medium font-mono">
+                {session.next_calibration_date
+                  ? new Date(session.next_calibration_date).toLocaleDateString('es')
+                  : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>EMP (Instrumento)</p>
+              <p className="text-xs font-medium font-mono">
+                {session.instrument?.emp != null
+                  ? `± ${session.instrument.emp} ${session.instrument.unit ?? ''}`
+                  : '—'}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* 2. GUM Budget — shown ONCE, before results */}
+        {/* 2. Standards used — traceability (ISO 17025 §6.5) */}
+        {session.standards && session.standards.length > 0 && (
+          <StandardsTraceabilityTable standards={session.standards} />
+        )}
+
+        {/* 3. GUM Budget — shown ONCE, before results */}
         {sharedBudget && (() => {
           const bd       = '1px solid var(--border-color)';
           const bdStrong = '2px solid var(--border-color)';
@@ -253,7 +319,7 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
           return (
             <div className="rounded-md p-4 mb-6" style={{ backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-color)' }}>
               <h3 className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{ color: 'var(--text-main)' }}>
-                2. Presupuesto de Incertidumbre (GUM) — Fuentes
+                3. Presupuesto de Incertidumbre (GUM) — Fuentes
               </h3>
               <div className="rounded-md overflow-hidden" style={{ border: bd }}>
                 <table className="w-full text-xs text-left">
@@ -272,8 +338,8 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
                       <tr key={`uA-${i}`} className="hover-bg transition-colors" style={{ borderBottom: bd }}>
                         <td className="px-3 py-2 font-medium" style={{ borderRight: bd, color: 'var(--text-main)' }}>
                           <span className="block">{item.source.source_name}</span>
-                          <span className="block text-[9px] opacity-50 font-mono truncate">
-                            {funcLabels[item.label] ?? item.label} — {item.source.note}
+                          <span className="block text-[9px] opacity-60 truncate">
+                            {funcLabels[item.label] ?? item.label} — <MathText>{item.source.note}</MathText>
                           </span>
                         </td>
                         <td className="px-3 py-2 text-center" style={{ borderRight: bd }}>{typeBadge('A')}</td>
@@ -282,7 +348,7 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
                           {typeof item.source.standard_uncertainty === 'number' ? item.source.standard_uncertainty.toFixed(4) : '—'}
                         </td>
                         <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text-muted)' }}>
-                          {item.source.degrees_of_freedom ?? '∞'}
+                          <DegreesOfFreedom dof={item.source.degrees_of_freedom} />
                         </td>
                       </tr>
                     ))}
@@ -292,7 +358,9 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
                         <td className="px-3 py-2 font-medium" style={{ borderRight: bd, color: 'var(--text-main)' }}>
                           <span className="block">{src.source_name}</span>
                           {src.note && (
-                            <span className="block text-[9px] mt-0.5 opacity-50 font-mono truncate" title={src.note}>{src.note}</span>
+                            <span className="block text-[9px] mt-0.5 opacity-60 truncate" title={src.note}>
+                              <MathText>{src.note}</MathText>
+                            </span>
                           )}
                         </td>
                         <td className="px-3 py-2 text-center" style={{ borderRight: bd }}>{typeBadge('B')}</td>
@@ -301,7 +369,7 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
                           {typeof src.standard_uncertainty === 'number' ? src.standard_uncertainty.toFixed(4) : '—'}
                         </td>
                         <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text-muted)' }}>
-                          {src.degrees_of_freedom ?? '∞'}
+                          <DegreesOfFreedom dof={src.degrees_of_freedom} />
                         </td>
                       </tr>
                     ))}
@@ -318,8 +386,15 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
             <motion.div key="results-top"
               initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20, transition: { duration: 0.2 } }} transition={{ duration: 0.35 }}>
-              <h3 className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{ color: 'var(--text-main)' }}>3. Resultados de Incertidumbre</h3>
-              <ResultsTable results={allResults} />
+              <h3 className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{ color: 'var(--text-main)' }}>4. Resultados de Incertidumbre</h3>
+              <ResultsTable results={allResults} tableType={tableType} unit={tableUnit} resolution={tableResolution} />
+              {session.instrument && (
+                <ConformityAssessment
+                  results={allResults}
+                  instrument={session.instrument}
+                  resolution={tableResolution}
+                />
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -383,7 +458,7 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
                     <span className="text-[9px] uppercase tracking-widest font-semibold" style={{ color: 'var(--text-muted)' }}>Resumen Final de Resultados</span>
                     <div className="h-px flex-1" style={{ backgroundColor: 'var(--border-color)' }} />
                   </div>
-                  <ResultsTable results={allResults} highlight />
+                  <ResultsTable results={allResults} tableType={tableType} unit={tableUnit} resolution={tableResolution} highlight />
                 </motion.div>
               )}
             </motion.div>
@@ -546,19 +621,22 @@ function RejectModal({ onCancel, onConfirm, loading }: {
 /*  Results Table                                             */
 /* ══════════════════════════════════════════════════════════ */
 
-/** Format a number to at most 5 significant decimal places, stripping trailing zeros. */
-const f5 = (v: number | string | undefined | null, fallback = '—'): string => {
-  if (v === undefined || v === null || v === '') return fallback;
-  const n = typeof v === 'string' ? parseFloat(v) : v;
-  if (isNaN(n)) return fallback;
-  // toFixed(5) then strip trailing zeros after decimal
-  return parseFloat(n.toFixed(5)).toString();
-};
-
-function ResultsTable({ results, highlight }: { results: BudgetPointWithFunction[]; highlight?: boolean }) {
-  const funcMap: Record<string, string> = { exterior: 'Exterior', interior: 'Interior', depth: 'Profundidad' };
-  const hasFunction = results.some(r => r.function);
-  const hasError    = results.some(r => r.error !== undefined);
+function ResultsTable({
+  results,
+  tableType,
+  unit,
+  resolution,
+  highlight,
+}: {
+  results: BudgetPointWithFunction[];
+  tableType: ReturnType<typeof resolveTableType>;
+  unit: string;
+  resolution: number | null;
+  highlight?: boolean;
+}) {
+  const columns = RESULT_COLUMNS[tableType] ?? RESULT_COLUMNS.generic;
+  const unitSuffix = unit ? ` [${unit}]` : '';
+  const ctx = { unit, resolution };
 
   return (
     <div className="rounded-md overflow-x-auto mb-4" style={{
@@ -567,12 +645,14 @@ function ResultsTable({ results, highlight }: { results: BudgetPointWithFunction
     }}>
       <table className="w-full text-xs text-left min-w-[500px]">
         <thead className="th-theme"><tr>
-          <th className="px-3 py-2 text-[11px]">Punto Nominal</th>
-          {hasFunction && <th className="px-3 py-2 text-[11px]">Función</th>}
-          {hasError    && <th className="px-3 py-2 text-[11px] text-right">Error</th>}
-          <th className="px-3 py-2 text-[11px] text-right">u_c</th>
-          <th className="px-3 py-2 text-[11px] text-right">k</th>
-          <th className="px-3 py-2 text-[11px] text-right font-bold">U (expandida)</th>
+          {columns.map((col) => (
+            <th
+              key={col.key}
+              className={`px-3 py-2 text-[11px] ${col.align === 'right' ? 'text-right' : ''} ${col.bold ? 'font-bold' : ''}`}
+            >
+              {col.label}{!col.unitless ? unitSuffix : ''}
+            </th>
+          ))}
         </tr></thead>
         <tbody className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
           {results.map((r, i) => (
@@ -580,18 +660,252 @@ function ResultsTable({ results, highlight }: { results: BudgetPointWithFunction
               initial={highlight ? { backgroundColor: 'rgba(255,165,38,0.1)' } : {}}
               animate={{ backgroundColor: 'transparent' }}
               transition={{ delay: i * 0.08, duration: 0.8 }}>
-              <td className="px-3 py-2 font-mono">{r.nominal_value}</td>
-              {hasFunction && <td className="px-3 py-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>{funcMap[r.function] || r.function || '—'}</td>}
-              {hasError    && <td className="px-3 py-2 text-right font-mono">{r.error !== undefined ? f5(r.error) : '—'}</td>}
-              <td className="px-3 py-2 text-right font-mono">{f5(r.combined_uncertainty_mm ?? r.combined_uncertainty)}</td>
-              <td className="px-3 py-2 text-right font-mono">{f5(r.k_factor)}</td>
-              <td className="px-3 py-2 text-right font-mono font-bold" style={{ color: '#FFA526' }}>
-                ± {f5(r.expanded_uncertainty_mm ?? r.expanded_uncertainty)}
-              </td>
+              {columns.map((col) => (
+                <td
+                  key={col.key}
+                  className={`px-3 py-2 font-mono ${col.align === 'right' ? 'text-right' : ''} ${col.bold ? 'font-bold' : ''}`}
+                  style={col.color ? { color: col.color } : undefined}
+                >
+                  {col.render(r, ctx)}
+                </td>
+              ))}
             </motion.tr>
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════ */
+/*  Conformity Assessment (ISO 17025 §7.8.6)                  */
+/* ══════════════════════════════════════════════════════════ */
+
+type ConformityVerdict = 'pass' | 'fail' | 'conditional' | 'unknown';
+
+/**
+ * ISO 17025 §7.8.6 decision rule (simple): a measurement is conformant when
+ *
+ *     |error| + U  ≤  EMP
+ *
+ * If the measured-value-plus-uncertainty band touches the EMP limit the result
+ * is reported as 'conditional' (within the guard band), pushing the final
+ * decision to the auditor. The strategy may also publish its own
+ * `conformity_statement`, in which case that value wins.
+ */
+function evaluateConformity(
+  error: number | undefined,
+  expandedU: number | undefined,
+  emp: number | null | undefined,
+  override: string | null | undefined,
+): ConformityVerdict {
+  const normalized = (override ?? '').toLowerCase();
+  if (normalized === 'pass' || normalized === 'fail' || normalized === 'conditional') {
+    return normalized as ConformityVerdict;
+  }
+  if (emp === null || emp === undefined || emp <= 0) return 'unknown';
+  if (error === undefined || expandedU === undefined) return 'unknown';
+
+  const band = Math.abs(error) + Math.abs(expandedU);
+  if (band <= Math.abs(emp) * 0.95) return 'pass';
+  if (band <= Math.abs(emp)) return 'conditional';
+  return 'fail';
+}
+
+const VERDICT_STYLES: Record<
+  ConformityVerdict,
+  { label: string; color: string; bg: string; border: string }
+> = {
+  pass:        { label: 'Conforme',         color: '#10B981', bg: '#10B98115', border: '#10B98140' },
+  fail:        { label: 'No conforme',      color: '#EF4444', bg: '#EF444415', border: '#EF444440' },
+  conditional: { label: 'Condicional',      color: '#F59E0B', bg: '#F59E0B15', border: '#F59E0B40' },
+  unknown:     { label: 'Sin EMP definido', color: '#6B7280', bg: '#6B728015', border: '#6B728030' },
+};
+
+function ConformityAssessment({
+  results,
+  instrument,
+  resolution,
+}: {
+  results: BudgetPointWithFunction[];
+  instrument: Instrument;
+  resolution: number | null;
+}) {
+  if (!results.length) return null;
+  const emp = instrument.emp;
+  const unit = instrument.unit ?? '';
+
+  const rows = results.map((r) => {
+    const error = r.error;
+    const U = r.expanded_uncertainty_mm ?? r.expanded_uncertainty;
+    const verdict = evaluateConformity(error, U, emp, r.conformity_statement);
+    return { point: r, error, U, verdict };
+  });
+  const summary = rows.reduce<Record<ConformityVerdict, number>>((acc, r) => {
+    acc[r.verdict] = (acc[r.verdict] ?? 0) + 1;
+    return acc;
+  }, { pass: 0, fail: 0, conditional: 0, unknown: 0 });
+
+  return (
+    <div className="rounded-md p-4 mt-4 mb-6" style={{ backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-color)' }}>
+      <h3 className="text-xs font-semibold mb-1 uppercase tracking-wider" style={{ color: 'var(--text-main)' }}>
+        5. Evaluación de Conformidad
+      </h3>
+      <p className="text-[10px] mb-3" style={{ color: 'var(--text-muted)' }}>
+        Criterio: |Error| + U ≤ EMP — ISO 17025 §7.8.6.
+        {emp != null && emp > 0
+          ? ` EMP = ± ${emp} ${unit}.`
+          : ' El instrumento no tiene EMP definido; no es posible declarar conformidad por punto.'}
+      </p>
+
+      <div className="flex flex-wrap gap-2 mb-3">
+        {(['pass', 'conditional', 'fail', 'unknown'] as ConformityVerdict[]).map((v) => {
+          if (summary[v] === 0) return null;
+          const s = VERDICT_STYLES[v];
+          return (
+            <span key={v} className="px-2 py-0.5 rounded text-[10px] font-semibold"
+              style={{ backgroundColor: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
+              {summary[v]} {s.label}
+            </span>
+          );
+        })}
+      </div>
+
+      <div className="rounded-md overflow-x-auto" style={{ border: '1px solid var(--border-color)' }}>
+        <table className="w-full text-xs text-left">
+          <thead className="th-theme">
+            <tr>
+              <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold">Punto</th>
+              <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-right">|Error|</th>
+              <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-right">U</th>
+              <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-right">|Error|+U</th>
+              <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-right">EMP</th>
+              <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-center">Veredicto</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
+            {rows.map((row, i) => {
+              const s = VERDICT_STYLES[row.verdict];
+              const band =
+                row.error !== undefined && row.U !== undefined
+                  ? Math.abs(row.error) + Math.abs(row.U)
+                  : undefined;
+              const label =
+                row.point.function
+                  ? `${formatMeasured(row.point.nominal_value, resolution)} (${row.point.function})`
+                  : formatMeasured(row.point.nominal_value, resolution);
+              return (
+                <tr key={i}>
+                  <td className="px-3 py-2 font-mono">{label}</td>
+                  <td className="px-3 py-2 text-right font-mono">
+                    {row.error !== undefined ? formatMeasured(Math.abs(row.error), resolution) : '—'}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono">{formatUncertainty(row.U)}</td>
+                  <td className="px-3 py-2 text-right font-mono">{band !== undefined ? formatUncertainty(band) : '—'}</td>
+                  <td className="px-3 py-2 text-right font-mono">
+                    {emp != null && emp > 0 ? `± ${emp}` : '—'}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
+                      style={{ backgroundColor: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
+                      {s.label}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════ */
+/*  Standards Traceability Table                              */
+/* ══════════════════════════════════════════════════════════ */
+
+/**
+ * Picks each metrological field from the frozen pivot snapshot first, falling
+ * back to the live Standard record. The snapshot is what the calibration
+ * actually used; the live record is just the latest known state.
+ */
+function pickStandardField<K extends keyof StandardSnapshot>(
+  std: Standard,
+  key: K,
+): StandardSnapshot[K] | undefined {
+  const snapshot = std.pivot?.snapshot_data;
+  if (snapshot && snapshot[key] !== undefined && snapshot[key] !== null) {
+    return snapshot[key];
+  }
+  const fromLive = (std as unknown as Record<string, unknown>)[key];
+  return fromLive === null ? undefined : (fromLive as StandardSnapshot[K]);
+}
+
+function StandardsTraceabilityTable({ standards }: { standards: Standard[] }) {
+  const bd = '1px solid var(--border-color)';
+  const today = new Date();
+
+  return (
+    <div className="rounded-md p-4 mb-6" style={{ backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-color)' }}>
+      <h3 className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{ color: 'var(--text-main)' }}>
+        2. Patrones empleados (Trazabilidad)
+      </h3>
+      <p className="text-[10px] mb-3" style={{ color: 'var(--text-muted)' }}>
+        Datos congelados en el momento de la calibración. La trazabilidad metrológica se garantiza
+        mediante el certificado emitido por el laboratorio acreditado.
+      </p>
+      <div className="rounded-md overflow-x-auto" style={{ border: bd }}>
+        <table className="w-full text-xs text-left">
+          <thead className="th-theme">
+            <tr>
+              <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold">Patrón</th>
+              <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold">Certificado</th>
+              <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold">Laboratorio</th>
+              <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-right">U (cert.)</th>
+              <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-right">k</th>
+              <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold">Fecha cal.</th>
+              <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold">Vence</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
+            {standards.map((std) => {
+              const expiry = pickStandardField(std, 'expiry_date');
+              const expiryDate = expiry ? new Date(expiry) : null;
+              const isExpired = expiryDate ? expiryDate < today : false;
+              const code = pickStandardField(std, 'internal_code') ?? std.internal_code;
+              const name = pickStandardField(std, 'name') ?? std.name;
+              const cert = pickStandardField(std, 'certificate_number') ?? std.certificate_number;
+              const lab = pickStandardField(std, 'calibrated_by_lab') ?? std.calibrated_by_lab ?? '—';
+              const u = pickStandardField(std, 'uncertainty_u') ?? std.uncertainty_u;
+              const k = pickStandardField(std, 'k_factor') ?? std.k_factor;
+              const calDate = pickStandardField(std, 'calibration_date') ?? std.calibration_date;
+              const oiml = pickStandardField(std, 'oiml_class') ?? std.oiml_class;
+              return (
+                <tr key={std.id} className="hover-bg transition-colors">
+                  <td className="px-3 py-2">
+                    <span className="block font-medium" style={{ color: 'var(--text-main)' }}>{code}</span>
+                    <span className="block text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                      {name}{oiml ? ` · OIML ${oiml}` : ''}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 font-mono text-[11px]">{cert ?? '—'}</td>
+                  <td className="px-3 py-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>{lab}</td>
+                  <td className="px-3 py-2 text-right font-mono">{formatUncertainty(u)}</td>
+                  <td className="px-3 py-2 text-right font-mono">{formatMeasured(k)}</td>
+                  <td className="px-3 py-2 font-mono text-[11px]">
+                    {calDate ? new Date(calDate).toLocaleDateString('es') : '—'}
+                  </td>
+                  <td className="px-3 py-2 font-mono text-[11px]" style={isExpired ? { color: '#EF4444', fontWeight: 600 } : undefined}>
+                    {expiryDate ? expiryDate.toLocaleDateString('es') : '—'}
+                    {isExpired && <span className="ml-1 text-[9px]">VENCIDO</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
