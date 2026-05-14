@@ -339,7 +339,7 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
                         <td className="px-3 py-2 font-medium" style={{ borderRight: bd, color: 'var(--text-main)' }}>
                           <span className="block">{item.source.source_name}</span>
                           <span className="block text-[9px] opacity-60 truncate">
-                            {funcLabels[item.label] ?? item.label} — <MathText>{item.source.note}</MathText>
+                            {funcLabels[item.label!] ?? item.label} — <MathText>{item.source.note}</MathText>
                           </span>
                         </td>
                         <td className="px-3 py-2 text-center" style={{ borderRight: bd }}>{typeBadge('A')}</td>
@@ -506,7 +506,7 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
               </div>
               <div className="flex gap-2 shrink-0">
                 <button
-                  onClick={() => handleDownloadCert(approvedCertId, session?.certificate_code)}
+                  onClick={() => handleDownloadCert(approvedCertId, session?.certificate_code ?? undefined)}
                   disabled={downloading}
                   className="h-9 px-4 rounded-md text-xs font-semibold text-white flex items-center gap-2 disabled:opacity-60 transition-opacity"
                   style={{ backgroundColor: '#10b981' }}
@@ -528,7 +528,7 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
         {session?.status === 'approved' && !approvedCertId && session?.certificate && (
           <div className="mt-4 pt-4 flex justify-end" style={{ borderTop: '1px solid var(--border-color)' }}>
             <button
-              onClick={() => handleDownloadCert(session.certificate.id, session.certificate_code)}
+              onClick={() => handleDownloadCert(session.certificate!.id, session.certificate_code ?? undefined)}
               disabled={downloading}
               className="h-8 px-4 rounded-md text-xs font-semibold flex items-center gap-1.5 disabled:opacity-60 transition-opacity"
               style={{ backgroundColor: C.primary, color: '#fff' }}

@@ -8,6 +8,7 @@ import { Eye, Download, Loader2, FileCheck, AlertCircle, Play, Trash2 } from 'lu
 import { motion, AnimatePresence } from 'framer-motion';
 import CalibrationReview from '@/components/calibration/CalibrationReview';
 import toast from 'react-hot-toast';
+import type { CalibrationSession, Certificate } from '@/types/calibration';
 
 import { C } from '@/lib/colors';
 const COLORS = { primary: C.primary, success: C.success, warning: C.warning, danger: C.danger };
@@ -43,22 +44,22 @@ export default function CalibrationPage() {
     }
   }, [searchParams, router]);
 
-  const { data: sessions = [], isLoading } = useQuery<any[]>({
+  const { data: sessions = [], isLoading } = useQuery<CalibrationSession[]>({
     queryKey: ['calibrationSessions'],
     queryFn: () => api.get('/calibration/sessions').then(r => r.data.data || []),
     staleTime: 1000 * 60 * 5,
   });
 
-  const { data: certificates = [], isLoading: loadingCerts, refetch: refetchCerts } = useQuery<any[]>({
+  const { data: certificates = [], isLoading: loadingCerts } = useQuery<Certificate[]>({
     queryKey: ['certificates'],
     queryFn: () => api.get('/certificates').then(r => r.data.data || []),
     enabled: activeTab === 'issued',
     staleTime: 1000 * 30,
   });
 
-  const pending  = sessions.filter((s: any) => s.status === 'pending_review');
-  const drafts   = sessions.filter((s: any) => s.status === 'draft');
-  const rejected = sessions.filter((s: any) => s.status === 'rejected');
+  const pending  = sessions.filter(s => s.status === 'pending_review');
+  const drafts   = sessions.filter(s => s.status === 'draft');
+  const rejected = sessions.filter(s => s.status === 'rejected');
 
   const handleDownload = async (certId: number, certNumber: string) => {
     setDownloadingId(certId);
@@ -188,7 +189,7 @@ export default function CalibrationPage() {
               ) : drafts.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-8 text-center text-[11px]" style={{ color: 'var(--text-muted)' }}>No hay borradores guardados</td></tr>
               ) : (
-                drafts.map((s: any) => {
+                drafts.map(s => {
                   const resumable = s.created_at && isDraftResumable(s.created_at);
                   return (
                   <tr key={s.id} className="td-theme hover-bg transition-colors">
@@ -265,12 +266,12 @@ export default function CalibrationPage() {
               ) : rejected.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-8 text-center text-[11px]" style={{ color: 'var(--text-muted)' }}>No hay sesiones rechazadas</td></tr>
               ) : (
-                rejected.map((s: any) => (
+                rejected.map(s => (
                   <tr key={s.id} className="td-theme hover-bg transition-colors">
                     <td className="px-4 py-3 font-mono font-medium">CS-{s.id}</td>
                     <td className="px-4 py-3">{s.instrument?.name || `Inst #${s.instrument_id}`}</td>
                     <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>{s.technician?.name || 'â€"'}</td>
-                    <td className="px-4 py-3 max-w-[200px] truncate" style={{ color: COLORS.danger }} title={s.observation}>{s.observation || 'â€"'}</td>
+                    <td className="px-4 py-3 max-w-[200px] truncate" style={{ color: COLORS.danger }} title={s.observation ?? undefined}>{s.observation || 'â€"'}</td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => router.push(`/calibration/${s.id}`)}
                         className="inline-flex items-center gap-1.5 rounded text-[11px] font-medium h-7 px-3 transition-colors"
@@ -319,7 +320,7 @@ export default function CalibrationPage() {
                   </td>
                 </tr>
               ) : (
-                certificates.map((cert: any) => (
+                certificates.map(cert => (
                   <tr key={cert.id} className="td-theme hover-bg transition-colors">
                     <td className="px-4 py-2.5 font-mono font-bold text-[11px]" style={{ color: COLORS.primary }}>
                       {cert.certificate_number}

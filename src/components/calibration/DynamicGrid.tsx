@@ -725,7 +725,7 @@ function HorizontalIterationsGrid({ grid, data, onChange, validationErrors }: Dy
     onChange(grid.id, { ...data, [rIdx]: { ...(data[rIdx] || {}), [editableCol.key]: val } });
 
   const computeStats = (colKey: string) => {
-    const vals = Object.values(data).map((r: any) => parseFloat(r[colKey])).filter(n => !isNaN(n));
+    const vals = Object.values(data).map(r => parseFloat(r[colKey])).filter(n => !isNaN(n));
     if (vals.length === 0) return { mean: '—', std: '—' };
     return { mean: fmt(avg(vals), 4), std: vals.length > 1 ? fmt(stddev(vals), 4) : '0.0000' };
   };

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
+import type { CalibrationSession, Standard } from '@/types/calibration';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, AlertTriangle, CheckCircle2, MoreHorizontal, PieChart as PieChartIcon, Activity, Zap } from 'lucide-react';
@@ -12,23 +13,23 @@ import { C } from '@/lib/colors';
 const COLORS = { primary: C.primary, danger: C.danger, warning: C.warning, success: C.success, draft: C.statusDraft };
 
 export default function DashboardPage() {
-  const { data: sessions = [] } = useQuery<any[]>({
+  const { data: sessions = [] } = useQuery<CalibrationSession[]>({
     queryKey: ['calibrationSessions'],
     queryFn: () => api.get('/calibration/sessions').then(r => r.data.data || []),
   });
 
-  const { data: standards = [] } = useQuery<any[]>({
+  const { data: standards = [] } = useQuery<Standard[]>({
     queryKey: ['standards'],
     queryFn: () => api.get('/standards').then(r => r.data.data || []),
   });
 
-  const recentSessions = sessions.slice(0, 7); 
-  
+  const recentSessions = sessions.slice(0, 7);
+
   const stats = {
-    pending:  sessions.filter((s: any) => s.status === 'pending_review').length,
-    approved: sessions.filter((s: any) => s.status === 'approved').length,
-    drafts:   sessions.filter((s: any) => s.status === 'draft').length,
-    rejected: sessions.filter((s: any) => s.status === 'rejected').length,
+    pending:  sessions.filter(s => s.status === 'pending_review').length,
+    approved: sessions.filter(s => s.status === 'approved').length,
+    drafts:   sessions.filter(s => s.status === 'draft').length,
+    rejected: sessions.filter(s => s.status === 'rejected').length,
   };
 
   const today = new Date();
@@ -36,7 +37,7 @@ export default function DashboardPage() {
   in30Days.setDate(today.getDate() + 30);
 
   let stdValid = 0, stdWarning = 0, stdExpired = 0;
-  standards.forEach((s: any) => {
+  standards.forEach(s => {
     if(!s.expiry_date) return;
     const exp = new Date(s.expiry_date);
     if(exp < today) stdExpired++;
@@ -58,7 +59,7 @@ export default function DashboardPage() {
   });
 
   const activityData = last7Days.map(dateStr => {
-    const daySessions = sessions.filter((s: any) => s.created_at.startsWith(dateStr));
+    const daySessions = sessions.filter(s => s.created_at.startsWith(dateStr));
     const dayName = new Date(dateStr + 'T12:00:00').toLocaleDateString('es', { weekday: 'short' });
     return {
       name: dayName.charAt(0).toUpperCase() + dayName.slice(1),
@@ -210,7 +211,7 @@ export default function DashboardPage() {
                     </td>
                   </tr>
                 ) : (
-                  recentSessions.map((s: any) => (
+                  recentSessions.map(s => (
                     <ActivityRow
                       key={s.id}
                       id={`EXT-${new Date(s.created_at).getFullYear()}-${String(s.id).padStart(4, '0')}`}

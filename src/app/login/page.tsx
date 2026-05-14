@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
+import { isAxiosError } from 'axios';
 import { motion } from 'framer-motion';
 import { C } from '@/lib/colors';
 import { Eye, EyeOff, ShieldCheck } from 'lucide-react';
@@ -26,8 +27,9 @@ export default function LoginPage() {
       const res = await api.post('/auth/login', { email, password });
       setAuth(res.data.token, res.data.user);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Credenciales inválidas');
+    } catch (err: unknown) {
+      const msg = isAxiosError(err) ? (err.response?.data?.message ?? 'Credenciales inválidas') : 'Credenciales inválidas';
+      setError(msg);
     } finally { setLoading(false); }
   };
 

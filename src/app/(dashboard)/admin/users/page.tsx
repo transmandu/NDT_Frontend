@@ -7,11 +7,13 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import api from '@/lib/api';
-import { Plus, X, Loader2, Shield, User, Eye, EyeOff } from 'lucide-react';
+import { Plus, X, Loader2, Shield, User as UserIcon, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { isAxiosError } from 'axios';
 import { DataTable } from '@/components/ui/data-table';
 import type { ColumnDef } from '@tanstack/react-table';
+import type { User } from '@/types/calibration';
 
 import { C } from '@/lib/colors';
 const ACCENT = C.accent;
@@ -42,7 +44,7 @@ const userSchema = z.object({
 type UserForm = z.infer<typeof userSchema>;
 
 /* ─── Columns ─────────────────────────────────────────────── */
-function buildColumns(onEdit: (u: any) => void): ColumnDef<any>[] {
+function buildColumns(onEdit: (u: User) => void): ColumnDef<User>[] {
   return [
     {
       accessorKey: 'name',
@@ -92,18 +94,26 @@ function buildColumns(onEdit: (u: any) => void): ColumnDef<any>[] {
 }
 
 /* ─── Page ─────────────────────────────────────────────────── */
+type UserPayload = {
+  name: string;
+  email: string;
+  role: 'admin' | 'auditor' | 'technician';
+  password?: string;
+  password_confirmation?: string;
+};
+
 export default function UsersPage() {
   const [modalOpen, setModalOpen] = useState(false);
-  const [editUser, setEditUser]   = useState<any>(null);
+  const [editUser, setEditUser]   = useState<User | null>(null);
   const qc = useQueryClient();
 
-  const { data: users = [], isLoading } = useQuery<any[]>({
+  const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ['users'],
     queryFn: () => api.get('/admin/users').then(r => r.data.data || []),
   });
 
   const saveMut = useMutation({
-    mutationFn: (payload: any) =>
+    mutationFn: (payload: UserPayload) =>
       editUser
         ? api.put(`/admin/users/${editUser.id}`, payload)
         : api.post('/auth/register', payload),
@@ -113,8 +123,10 @@ export default function UsersPage() {
       setModalOpen(false);
       setEditUser(null);
     },
-    onError: (err: any) => {
-      const msg = err.response?.data?.message || 'Error al guardar el usuario';
+    onError: (err: unknown) => {
+      const msg = isAxiosError(err)
+        ? (err.response?.data?.message ?? 'Error al guardar el usuario')
+        : 'Error al guardar el usuario';
       toast.error(msg);
     },
   });
@@ -161,23 +173,23 @@ export default function UsersPage() {
 
 /* ─── User Modal ─────────────────────────────────────────── */
 function UserModal({ user, onClose, onSave, saving }: {
-  user: any | null; onClose: () => void;
-  onSave: (data: any) => void; saving: boolean;
+  user: User | null; onClose: () => void;
+  onSave: (data: UserPayload) => void; saving: boolean;
 }) {
   const isEdit = !!user;
   const [showPwd, setShowPwd] = useState(false);
 
   const { register, handleSubmit, formState: { errors } } = useForm<UserForm>({
     resolver: zodResolver(userSchema),
-    defaultValues: isEdit ? {
+    defaultValues: isEdit && user ? {
       name:  user.name,
       email: user.email,
-      role:  user.role,
+      role:  user.role as 'admin' | 'auditor' | 'technician',
     } : { role: 'technician' },
   });
 
   const onSubmit = (data: UserForm) => {
-    const payload: Record<string, any> = { name: data.name, email: data.email, role: data.role };
+    const payload: UserPayload = { name: data.name, email: data.email, role: data.role };
     if (data.password) {
       payload.password = data.password;
       payload.password_confirmation = data.password_confirmation;
@@ -199,7 +211,7 @@ function UserModal({ user, onClose, onSave, saving }: {
         <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border-color)' }}>
           <div>
             <h2 className="text-sm font-bold flex items-center gap-2" style={{ color: 'var(--text-main)' }}>
-              <User size={15} style={{ color: ACCENT }} />
+              <UserIcon size={15} style={{ color: ACCENT }} />
               {isEdit ? `Editar — ${user.name}` : 'Nuevo Usuario del Sistema'}
             </h2>
             <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>

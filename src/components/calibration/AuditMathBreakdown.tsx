@@ -5,31 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Sigma, Hash } from 'lucide-react';
 import KaTeX, { MathBlock } from '@/components/math/KaTeX';
 import type { UncertaintySource } from '@/types/calibration';
+import type { BudgetPointWithFunction } from '@/components/calibration/resultsTableConfig';
+
+type PointResult = BudgetPointWithFunction;
 
 const ORANGE = '#FFA526';
 const BLUE   = '#3b82f6';
-
-interface PointResult {
-  nominal_value: number;
-  function?: string;
-  mean_mm?: number;
-  average_measured?: number;
-  error?: number;
-  std_deviation_um?: number;
-  sj_used_um?: number;
-  sj_source?: string;
-  n_readings?: number;
-  readings_mm?: number[];
-  uncertainty_sources: UncertaintySource[];
-  combined_uncertainty_um?: number;
-  combined_uncertainty_mm?: number;
-  combined_uncertainty?: number;
-  effective_dof?: number;
-  k_factor: number;
-  expanded_uncertainty_um?: number;
-  expanded_uncertainty_mm?: number;
-  expanded_uncertainty?: number;
-}
 
 /* ─── Helpers ───────────────────────────────────────────────── */
 const f = (n: number | undefined | null, p = 5): string => {
@@ -212,7 +193,7 @@ function PointHeader({ point, index, n, unit }: { point: PointResult; index: num
       style={{ backgroundColor: 'rgba(255,165,38,0.08)', border: '1px solid rgba(255,165,38,0.2)' }}>
       <Hash size={14} style={{ color: ORANGE }} />
       <span className="text-[12px] font-bold" style={{ color: ORANGE }}>
-        Punto {index + 1}: {point.nominal_value} {unit}
+        Punto {index + 1}: {point.nominal_value ?? 0} {unit}
       </span>
       {point.function && (
         <span className="text-[9px] px-2 py-0.5 rounded font-medium"
@@ -226,7 +207,7 @@ function PointHeader({ point, index, n, unit }: { point: PointResult; index: num
 }
 
 /* ─── Final Result Box ──────────────────────────────────────── */
-function FinalResultBox({ U_um, U_mm, k, nominal, unit }: { U_um?: number; U_mm?: number; k: number; nominal: number; unit: string }) {
+function FinalResultBox({ U_um, U_mm, k = 2, nominal = 0, unit }: { U_um?: number; U_mm?: number; k?: number; nominal?: number; unit: string }) {
   const texUnit = unit.replace(/μ/g, '\\mu ');
   const UTex = U_um !== undefined
     ? `${f(U_um)} \\;\\mu\\text{m}`
@@ -279,7 +260,7 @@ function PointBreakdown({ point, index, unit }: { point: PointResult; index: num
         {point.error !== undefined && (
           <Step number={sn++} title="Error de Indicación">
             <MathBlock
-              tex={`E = \\bar{x} - P = ${f(mean)} - ${f(point.nominal_value)} = ${f(point.error)} \\;\\text{${texUnit}}`}
+              tex={`E = \\bar{x} - P = ${f(mean)} - ${f(point.nominal_value ?? 0)} = ${f(point.error)} \\;\\text{${texUnit}}`}
               label="Diferencia instrumento − patrón"
             />
           </Step>
@@ -298,7 +279,7 @@ function PointBreakdown({ point, index, unit }: { point: PointResult; index: num
         )}
 
         <div className="mt-2">
-          <FinalResultBox U_um={U_um} U_mm={U_mm} k={k} nominal={point.nominal_value} unit={unit} />
+          <FinalResultBox U_um={U_um} U_mm={U_mm} k={k} nominal={point.nominal_value ?? 0} unit={unit} />
         </div>
       </div>
     </div>
@@ -350,7 +331,7 @@ export default function AuditMathBreakdown({ results, instrumentUnit }: { result
       {results.map((point, idx) => {
         const isOpen = expandedPoints.has(idx);
         // Use per-point unit if backend provided it (EL-001: V, A, Ω); else fall back to global unit
-        const ptUnit = (point as any).unit ?? unit;
+        const ptUnit = point.unit ?? unit;
         const U_display = point.expanded_uncertainty_um !== undefined
           ? `± ${f(point.expanded_uncertainty_um)} µm`
           : `± ${f(point.expanded_uncertainty_mm ?? point.expanded_uncertainty)} ${ptUnit}`;
@@ -366,7 +347,7 @@ export default function AuditMathBreakdown({ results, instrumentUnit }: { result
               <div className="flex items-center gap-3">
                 <Sigma size={16} style={{ color: isOpen ? ORANGE : 'var(--text-muted)' }} />
                 <span className="text-[12px] font-bold" style={{ color: 'var(--text-main)' }}>
-                  {point.nominal_value} {ptUnit}
+                  {point.nominal_value ?? 0} {ptUnit}
                 </span>
                 {point.function && (
                   <span className="text-[9px] px-1.5 py-0.5 rounded"

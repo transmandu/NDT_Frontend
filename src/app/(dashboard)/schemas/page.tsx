@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { isAxiosError } from 'axios';
 import type { ProcedureSchema } from '@/types/calibration';
 import { DataTable } from '@/components/ui/data-table';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -288,8 +289,9 @@ export default function SchemasPage() {
       toast.success('Esquema desactivado correctamente.');
       setDeactivateTarget(null);
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Error al desactivar el esquema.');
+    onError: (err: unknown) => {
+      const msg = isAxiosError(err) ? (err.response?.data?.message ?? 'Error al desactivar el esquema.') : 'Error al desactivar el esquema.';
+      toast.error(msg);
       setDeactivateTarget(null);
     },
   });
@@ -301,8 +303,9 @@ export default function SchemasPage() {
       qc.invalidateQueries({ queryKey: ['schemas'] });
       toast.success('Esquema activado correctamente.');
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Error al activar el esquema.');
+    onError: (err: unknown) => {
+      const msg = isAxiosError(err) ? (err.response?.data?.message ?? 'Error al activar el esquema.') : 'Error al activar el esquema.';
+      toast.error(msg);
     },
   });
 

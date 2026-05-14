@@ -8,6 +8,7 @@ import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import api from '@/lib/api';
+import { isAxiosError } from 'axios';
 import {
   Plus, X, Loader2, AlertTriangle, Trash2,
   MoreHorizontal, Pencil, CheckCircle, AlertCircle, Clock,
@@ -77,6 +78,16 @@ const standardSchema = z.object({
   mass_density:        z.coerce.number().nullable().optional(),
 });
 type StandardForm = z.infer<typeof standardSchema>;
+
+/* ─── Per-category "extras" field descriptor ─────────────── */
+type StandardExtra = {
+  key: keyof StandardForm;
+  label: string;
+  type: 'number' | 'select' | 'text';
+  hint?: string;
+  placeholder?: string;
+  options?: readonly string[];
+};
 
 /* ─── Status helper ──────────────────────────────────────── */
 function getStatus(expiry: string) {
@@ -363,8 +374,14 @@ function StandardModal({ standard, standards, initialCategory = null, onClose }:
       else { await api.post('/standards', payload); toast.success('Patrón de referencia creado'); }
       qc.invalidateQueries({ queryKey: ['standards'] });
       onClose();
-    } catch (err: any) {
-      const first = err.response?.data?.errors ? (Object.values(err.response.data.errors)[0] as string[])[0] : err.response?.data?.message || 'Error al guardar';
+    } catch (err: unknown) {
+      let first = 'Error al guardar';
+      if (isAxiosError(err)) {
+        const errors = err.response?.data?.errors as Record<string, string[]> | undefined;
+        first = errors
+          ? Object.values(errors)[0]?.[0] ?? first
+          : err.response?.data?.message ?? first;
+      }
       toast.error(first);
     }
   };
@@ -468,11 +485,11 @@ function StandardModal({ standard, standards, initialCategory = null, onClose }:
                 {selectedCat && selectedCat.extras.length > 0 && (
                   <Sec title={`Configuración — ${selectedCat.label}`} hint="Campos específicos para el cálculo de incertidumbre">
                     <div className="space-y-3">
-                      {selectedCat.extras.map((ex: any) => (
-                        <Fld key={ex.key} label={ex.label} hint={ex.hint} error={(errors as any)[ex.key]?.message}>
+                      {(selectedCat.extras as readonly StandardExtra[]).map(ex => (
+                        <Fld key={ex.key} label={ex.label} hint={ex.hint} error={errors[ex.key]?.message}>
                           {ex.type === 'select'
-                            ? <select {...register(ex.key as any)} className="field-input"><option value="">— Seleccionar —</option>{ex.options.map((o: string) => <option key={o} value={o}>{o}</option>)}</select>
-                            : <input {...register(ex.key as any)} type="number" step="any" placeholder={ex.placeholder} className="field-input font-mono" />
+                            ? <select {...register(ex.key)} className="field-input"><option value="">— Seleccionar —</option>{ex.options?.map(o => <option key={o} value={o}>{o}</option>)}</select>
+                            : <input {...register(ex.key)} type="number" step="any" placeholder={ex.placeholder} className="field-input font-mono" />
                           }
                         </Fld>
                       ))}

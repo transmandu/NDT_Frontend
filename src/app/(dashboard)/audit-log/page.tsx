@@ -4,8 +4,18 @@ import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { Search } from 'lucide-react';
 
+interface AuditLogEntry {
+  id?: number;
+  created_at: string;
+  action: string;
+  auditable_type?: string;
+  auditable_id?: number;
+  user?: { id?: number; name?: string };
+  metadata?: Record<string, unknown> | null;
+}
+
 export default function AuditLogPage() {
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 

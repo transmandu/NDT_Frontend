@@ -4,6 +4,23 @@ export interface User {
   email: string;
   role: string;
   job_title?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/**
+ * Datos crudos enviados por el frontend al backend para cada sesión de calibración.
+ * Su forma exacta depende del procedimiento (`grid.type`):
+ * - cada `gridId` mapea a un arreglo de filas;
+ * - cada fila es un `Record<string, unknown>` cuyos valores pueden ser
+ *   `number | string | number[] | Array<{ reading: number }>` según la columna.
+ * El consumidor (backend o `rebuildGridData`) debe hacer narrowing antes de leer.
+ */
+export type RawPayloadRow = Record<string, unknown>;
+export interface RawPayload {
+  instrument_resolution?: number;
+  metadata?: Record<string, string>;
+  [gridId: string]: unknown;
 }
 
 export interface UncertaintySource {
@@ -64,6 +81,13 @@ export interface BudgetPoint {
   std_deviation?: number;
   std_deviation_um?: number;
   n_readings?: number;
+  readings_mm?: number[];
+
+  /* Repeatability override (dimensional) */
+  sj_used_um?: number;
+  sj_source?: string;
+  standard_length_mm?: number;
+  deviation_um?: number;
 
   /* Error variants */
   error?: number;
@@ -125,12 +149,16 @@ export interface TraceabilityEntry {
 export interface MetadataRequirement {
   field: string;
   label: string;
-  type: 'number' | 'string' | 'date';
+  type: 'number' | 'string' | 'date' | 'boolean' | 'checkbox' | 'select';
   unit?: string;
   required: boolean;
+  readonly?: boolean;
   min?: number;
   max?: number;
   default?: number | string | boolean | null;
+  hint?: string;
+  tooltip?: string;
+  options?: string[];
 }
 
 export interface GridColumn {
@@ -219,7 +247,7 @@ export interface CalibrationSession {
   calibration_date?: string | null;
   next_calibration_date?: string | null;
   ambient_temperature_uncertainty?: number | null;
-  approved_by?: number | null;
+  certificate?: { id: number; [key: string]: unknown };
 }
 
 export interface Instrument {
@@ -239,6 +267,8 @@ export interface Instrument {
   calibration_interval_months?: number | null;
   location: string | null;
   status: string;
+  /** Patrón "de fábrica" preferente para este instrumento (FK a `standards`). */
+  factory_standard_id?: number | null;
 }
 
 /**
@@ -301,6 +331,18 @@ export interface Standard {
   pivot?: { snapshot_data?: StandardSnapshot | null };
 }
 
+export interface Certificate {
+  id: number;
+  certificate_number: string;
+  instrument_name?: string | null;
+  instrument_code?: string | null;
+  instrument_serial?: string | null;
+  calibration_date?: string | null;
+  next_calibration_date?: string | null;
+  conforms: boolean | null;
+  pdf_ready: boolean;
+}
+
 export interface ProcedureSchema {
   id: number;
   code: string;
@@ -310,8 +352,8 @@ export interface ProcedureSchema {
   category: string;
   is_active: boolean;
   ui_schema: ProcedureUiSchema;
-  validation_rules: Record<string, any> | null;
-  math_config: Record<string, any> | null;
+  validation_rules: Record<string, unknown> | null;
+  math_config: Record<string, unknown> | null;
   calibration_sessions_count?: number;
   has_strategy?: boolean;
   created_at: string;

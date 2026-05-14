@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Loader2, CheckCircle2, AlertCircle, FileCode2, Settings2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { isAxiosError } from 'axios';
 import type { ProcedureSchema } from '@/types/calibration';
 
 /* ─── Constants ────────────────────────────────────────────── */
@@ -54,15 +55,15 @@ function validateUiSchema(raw: string): { ok: boolean; message: string } {
       if (!Array.isArray(g.columns) || g.columns.length === 0) return { ok: false, message: `Grid "${g.id}" sin "columns"` };
     }
     return { ok: true, message: `Válido · ${parsed.grids.length} grid(s) · ${parsed.metadata_requirements.length} campo(s) de metadata` };
-  } catch (e: any) {
-    return { ok: false, message: e.message };
+  } catch (e: unknown) {
+    return { ok: false, message: e instanceof Error ? e.message : 'JSON inválido' };
   }
 }
 
 function validateOptionalJson(raw: string): { ok: boolean; message: string } {
   if (!raw || raw.trim() === '' || raw.trim() === 'null') return { ok: true, message: 'Vacío (se guardará null)' };
   try { JSON.parse(raw); return { ok: true, message: 'JSON válido' }; }
-  catch (e: any) { return { ok: false, message: e.message }; }
+  catch (e: unknown) { return { ok: false, message: e instanceof Error ? e.message : 'JSON inválido' }; }
 }
 
 /* ─── Sub-components ───────────────────────────────────────── */
@@ -209,14 +210,18 @@ export default function SchemaModal({
       toast.success(isEdit ? 'Esquema actualizado correctamente.' : 'Esquema creado exitosamente.');
       onClose();
     },
-    onError: (err: any) => {
-      const msgs = err.response?.data?.errors;
-      if (msgs) {
-        const first = Object.values(msgs)[0];
-        toast.error(Array.isArray(first) ? first[0] : String(first));
-      } else {
+    onError: (err: unknown) => {
+      if (isAxiosError(err)) {
+        const msgs = err.response?.data?.errors as Record<string, string[]> | undefined;
+        if (msgs) {
+          const first = Object.values(msgs)[0];
+          toast.error(Array.isArray(first) ? first[0] : String(first));
+          return;
+        }
         toast.error(err.response?.data?.message || 'Error al guardar el esquema.');
+        return;
       }
+      toast.error('Error al guardar el esquema.');
     },
   });
 
@@ -290,7 +295,7 @@ export default function SchemaModal({
         {/* ── Tabs ── */}
         <div className="flex shrink-0 px-6 gap-1 pt-3" style={{ borderBottom: '1px solid var(--border-color)' }}>
           {([['basic', Settings2, 'Información General'], ['json', FileCode2, 'Configuración JSON']] as const).map(([key, Icon, label]) => (
-            <button key={key} type="button" onClick={() => setTab(key as any)}
+            <button key={key} type="button" onClick={() => setTab(key)}
               className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium rounded-t-md transition-colors relative"
               style={{
                 color: tab === key ? ACCENT : 'var(--text-muted)',

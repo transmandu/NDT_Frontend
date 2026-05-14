@@ -8,7 +8,7 @@ import { isAxiosError } from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calculator, Send, Save, Loader2, Info, BookOpen, ChevronDown, AlertTriangle, Play } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { Instrument, Standard, GridSchema, BudgetPreview } from '@/types/calibration';
+import type { Instrument, Standard, GridSchema, BudgetPreview, BudgetPoint, UncertaintySource, ProcedureSchema, RawPayload, RawPayloadRow } from '@/types/calibration';
 import DynamicGrid, { type GridData } from '@/components/calibration/DynamicGrid';
 import { isSameCategory } from '@/lib/categoryUtils';
 
@@ -36,23 +36,24 @@ const DRAFT_KEY = 'ndt_active_draft';
  * Reconstructs the form's GridData map from a server raw_payload.
  * Reverses buildPayload() so recovered sessions show their saved measurements.
  */
-function rebuildGridData(rawPayload: Record<string, any>, grids: GridSchema[]): Record<string, GridData> {
+function rebuildGridData(rawPayload: RawPayload, grids: GridSchema[]): Record<string, GridData> {
   const result: Record<string, GridData> = {};
   for (const grid of grids) {
-    const rows: any[] = rawPayload[grid.id];
+    const rows = rawPayload[grid.id];
     if (!Array.isArray(rows) || rows.length === 0) continue;
     const gridData: GridData = {};
-    rows.forEach((row: any, i: number) => {
+    rows.forEach((row: unknown, i: number) => {
       if (!row || typeof row !== 'object') return;
+      const r = row as RawPayloadRow;
       const rowData: Record<string, string> = {};
       for (const col of grid.columns) {
         if (col.computed) continue;
-        const val = row[col.key];
+        const val = r[col.key];
         if (val === undefined || val === null) continue;
         if (col.type === 'number_array' && Array.isArray(val)) {
           // [{reading: v}, ...] vs flat [v1, v2, ...]
           if (val.length > 0 && typeof val[0] === 'object' && val[0] !== null && 'reading' in val[0]) {
-            rowData[col.key] = val.map((v: any) => String(v.reading ?? '')).join(', ');
+            rowData[col.key] = (val as Array<{ reading?: number | string }>).map(v => String(v.reading ?? '')).join(', ');
           } else {
             rowData[col.key] = val.map(String).join(', ');
           }
@@ -124,7 +125,7 @@ export default function NewCalibrationPage() {
   // When true, the next selectedInstrument change came from draft recovery — skip the reset effect
   const skipNextResetRef = useRef(false);
   // Holds raw_payload from a recovered session; consumed once grids load so we can rebuild gridDataMap
-  const recoveryRawPayloadRef = useRef<Record<string, any> | null>(null);
+  const recoveryRawPayloadRef = useRef<RawPayload | null>(null);
   const [gridRecoveryTrigger, setGridRecoveryTrigger] = useState(0);
   // Tracks the last selectedInstrument value the reset effect has processed. Survives React
   // StrictMode's double-mount in dev (which would otherwise consume a one-shot "initial mount"
@@ -227,17 +228,18 @@ export default function NewCalibrationPage() {
         if (!meta.ambient_pressure && session.ambient_pressure != null)
           meta.ambient_pressure = String(session.ambient_pressure);
 
-        const stds: any[] = session.standards ?? [];
+        const stds: Array<{ id?: number }> = session.standards ?? [];
 
         // Count how many grid rows have data so the user knows the tables were restored
-        const rawPayload = session.raw_payload && typeof session.raw_payload === 'object'
-          ? session.raw_payload
+        const rawPayload: RawPayload | null = session.raw_payload && typeof session.raw_payload === 'object'
+          ? session.raw_payload as RawPayload
           : null;
         let restoredRowCount = 0;
         if (rawPayload) {
           for (const key in rawPayload) {
             if (key === 'metadata' || key === 'instrument_resolution') continue;
-            if (Array.isArray(rawPayload[key])) restoredRowCount += rawPayload[key].length;
+            const v = rawPayload[key];
+            if (Array.isArray(v)) restoredRowCount += v.length;
           }
         }
 
@@ -326,7 +328,7 @@ export default function NewCalibrationPage() {
 
   // ─── Load full schema when instrument changes ───
   // staleTime: 0 → always fetches fresh schema (avoids stale cache after reseeds)
-  const { data: matchedSchema = null, isFetching: loadingSchema } = useQuery({
+  const { data: matchedSchema = null, isFetching: loadingSchema } = useQuery<ProcedureSchema | null>({
     queryKey: ['schema', baseSchemaCode],
     queryFn: () => api.get(`/calibration/schema/${baseSchemaCode}`).then(res => res.data.schema),
     enabled: !!baseSchemaCode,
@@ -359,8 +361,8 @@ export default function NewCalibrationPage() {
     if (filteredStandards.length === 0) { setSelectedStandard(''); return; }
 
     // 1. Try to match factory_standard_id registered on the instrument
-    if ((selectedInst as any).factory_standard_id) {
-      const factoryMatch = filteredStandards.find(s => s.id === (selectedInst as any).factory_standard_id);
+    if (selectedInst.factory_standard_id) {
+      const factoryMatch = filteredStandards.find(s => s.id === selectedInst.factory_standard_id);
       if (factoryMatch) { setSelectedStandard(String(factoryMatch.id)); return; }
     }
     // 2. Auto-select if only one standard matches the category
@@ -392,14 +394,14 @@ export default function NewCalibrationPage() {
         next.thermometer_k = String(selectedStd.k_factor);
 
       // Pendiente (b en U=a+b×L, µm/mm)
-      if (!next.standard_u_slope && (selectedStd as any).uncertainty_slope != null)
-        next.standard_u_slope = String((selectedStd as any).uncertainty_slope);
+      if (!next.standard_u_slope && selectedStd.uncertainty_slope != null)
+        next.standard_u_slope = String(selectedStd.uncertainty_slope);
 
       // Deriva del bloque patrón (µm/año desde historial)
       if (!next.standard_drift_um
-        && (selectedStd as any).drift_rate_per_year != null
-        && (selectedStd as any).drift_rate_per_year > 0)
-        next.standard_drift_um = String((selectedStd as any).drift_rate_per_year);
+        && selectedStd.drift_rate_per_year != null
+        && selectedStd.drift_rate_per_year > 0)
+        next.standard_drift_um = String(selectedStd.drift_rate_per_year);
 
       // ── Defaults ambientales ─────────────────────────────────────────────────
       if (!next.air_temperature)          next.air_temperature          = '20';
@@ -432,8 +434,8 @@ export default function NewCalibrationPage() {
   }, []);
 
   // ─── Build raw payload matching what the backend Strategy expects ───
-  const buildPayload = useCallback(() => {
-    const payload: Record<string, any> = {};
+  const buildPayload = useCallback((): RawPayload => {
+    const payload: RawPayload = {};
 
     // instrument_resolution is required by all backend strategies.
     if (selectedInst) {
@@ -454,7 +456,7 @@ export default function NewCalibrationPage() {
         // Backend expects array of { reading: number }
         payload[grid.id] = rows.map(rIdx => {
           const row = gridData[rIdx];
-          const result: Record<string, any> = {};
+          const result: RawPayloadRow = {};
           for (const col of grid.columns) {
             if (col.editable && row[col.key]) {
               result[col.key] = parseFloat(row[col.key]) || 0;
@@ -466,7 +468,7 @@ export default function NewCalibrationPage() {
         // Backend expects array of { position, reading }
         payload[grid.id] = rows.map(rIdx => {
           const row = gridData[rIdx];
-          const result: Record<string, any> = {};
+          const result: RawPayloadRow = {};
           for (const col of grid.columns) {
             if (col.key === 'position') {
               result.position = row.position || `Pos ${rIdx + 1}`;
@@ -485,7 +487,7 @@ export default function NewCalibrationPage() {
 
         payload[grid.id] = rows.map(rIdx => {
           const row = gridData[rIdx];
-          const result: Record<string, any> = {};
+          const result: RawPayloadRow = {};
 
           for (const col of grid.columns) {
             if (col.key === 'nominal_value' || col.key === 'nominal_length_mm') {
@@ -493,9 +495,9 @@ export default function NewCalibrationPage() {
             } else if (col.key === 'standard_length_mm') {
               result.standard_length_mm = parseFloat(row[col.key] || row['nominal_length_mm'] || '0');
             } else if (col.type === 'number_array' && row[col.key]) {
-              const vals = String(row[col.key]).split(',').map((v: string) => parseFloat(v.trim())).filter((n: number) => !isNaN(n));
+              const vals = String(row[col.key]).split(',').map(v => parseFloat(v.trim())).filter(n => !isNaN(n));
               // Vernier: plain float array. Others: array of {reading: v}
-              result[col.key] = isVernier ? vals : vals.map((v: number) => ({ reading: v }));
+              result[col.key] = isVernier ? vals : vals.map(v => ({ reading: v }));
             } else if (col.editable && col.type === 'number' && row[col.key]) {
               result[col.key] = parseFloat(row[col.key]) || 0;
             }
@@ -506,14 +508,14 @@ export default function NewCalibrationPage() {
         // EL-001 Multímetro: convierte number_array de CSV → float[], select/string → string, number → float
         payload[grid.id] = rows.map(rIdx => {
           const row = gridData[rIdx];
-          const result: Record<string, any> = {};
+          const result: RawPayloadRow = {};
           for (const col of grid.columns) {
             if (col.computed || !row[col.key]) continue;
             if (col.type === 'number_array') {
               const vals = String(row[col.key])
                 .split(',')
-                .map((v: string) => parseFloat(v.trim()))
-                .filter((n: number) => !isNaN(n));
+                .map(v => parseFloat(v.trim()))
+                .filter(n => !isNaN(n));
               if (vals.length > 0) result[col.key] = vals;
             } else if (col.type === 'number') {
               const n = parseFloat(row[col.key]);
@@ -524,12 +526,12 @@ export default function NewCalibrationPage() {
             }
           }
           return result;
-        }).filter((p: Record<string, any>) => Object.keys(p).length > 0);
+        }).filter(p => Object.keys(p).length > 0);
       } else {
         // Generic: pass raw data
         payload[grid.id] = rows.map(rIdx => {
           const row = gridData[rIdx];
-          const result: Record<string, any> = {};
+          const result: RawPayloadRow = {};
           for (const col of grid.columns) {
             if (row[col.key]) {
               result[col.key] = col.type === 'number' ? parseFloat(row[col.key]) : row[col.key];
@@ -840,7 +842,7 @@ export default function NewCalibrationPage() {
             const isActive = activeStep === idx;
             const isDone = activeStep > idx;
             const isResultStep = idx === steps.length - 1;
-            const isGridStep = !!(step as any).gridStep;
+            const isGridStep = !!step.gridStep;
             const isAvailable =
               idx === 0 ||
               (isGridStep && !!activeSessionId && !!matchedSchema) ||
@@ -1044,7 +1046,7 @@ export default function NewCalibrationPage() {
 
                 {/* ── Editable fields: measured by the technician ── */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {(matchedSchema.ui_schema?.metadata_requirements || []).map((req: any, idx: number) => {
+                  {(matchedSchema.ui_schema?.metadata_requirements || []).map((req, idx: number) => {
                     const isBool    = req.type === 'boolean' || req.type === 'checkbox';
                     const isSelect  = req.type === 'select';
                     const isNumber  = req.type === 'number';
@@ -1074,7 +1076,7 @@ export default function NewCalibrationPage() {
                       {/* ── Select → options from schema ── */}
                       {isSelect && (
                         <select
-                          value={fieldVal || req.default || ''}
+                          value={fieldVal || (typeof req.default === 'boolean' ? '' : req.default) || ''}
                           onChange={e => setField(e.target.value)}
                           className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono"
                         >
@@ -1121,7 +1123,7 @@ export default function NewCalibrationPage() {
 
                 {/* ── Readonly fields: auto-loaded from DB / physical constants ── */}
                 {(matchedSchema.ui_schema?.metadata_requirements || [])
-                  .some((r: any) => r.readonly || READONLY_META_FIELDS.has(r.field)) && (
+                  .some(r => r.readonly || READONLY_META_FIELDS.has(r.field)) && (
                   <div className="mt-4 pt-3" style={{ borderTop: '1px dashed var(--border-color)' }}>
                     <p className="text-[9px] uppercase tracking-widest font-semibold mb-2 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                       
@@ -1129,8 +1131,8 @@ export default function NewCalibrationPage() {
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                       {(matchedSchema.ui_schema?.metadata_requirements || [])
-                        .filter((req: any) => req.readonly || READONLY_META_FIELDS.has(req.field))
-                        .map((req: any, idx: number) => {
+                        .filter(req => req.readonly || READONLY_META_FIELDS.has(req.field))
+                        .map((req, idx: number) => {
                           const val = environmentalData[req.field] ?? req.default;
                           const numVal = parseFloat(String(val ?? ''));
                           const display = val != null && !isNaN(numVal)
@@ -1447,8 +1449,8 @@ function UnifiedResultsTable({
   unit,
   procedureCode,
 }: {
-  points: any[];
-  functions?: Record<string, any[]>;
+  points: BudgetPoint[];
+  functions?: Record<string, BudgetPoint[]>;
   unit?: string;
   procedureCode?: string;
 }) {
@@ -1463,9 +1465,9 @@ function UnifiedResultsTable({
     };
 
     // ── Shared Type B sources (identical across all functions, from first point) ──
-    const firstFuncPoints: any[] = Object.values(functions).find((pts: any) => pts?.length > 0) || [];
-    const allSources: any[]      = firstFuncPoints[0]?.uncertainty_sources || [];
-    const typeBSources            = allSources.filter((s: any) => s.type === 'B');
+    const firstFuncPoints: BudgetPoint[] = Object.values(functions).find(pts => pts && pts.length > 0) || [];
+    const allSources: UncertaintySource[] = firstFuncPoints[0]?.uncertainty_sources || [];
+    const typeBSources                    = allSources.filter(s => s.type === 'B');
 
     const bd       = '1px solid var(--border-color)';
     const bdStrong = '2px solid var(--border-color)';
@@ -1500,9 +1502,9 @@ function UnifiedResultsTable({
               </thead>
               <tbody>
                 {/* u(A) — one row per function */}
-                {Object.entries(functions).map(([funcKey, funcPoints]: [string, any]) => {
+                {Object.entries(functions).map(([funcKey, funcPoints]) => {
                   if (!funcPoints?.length) return null;
-                  const uASrc = funcPoints[0]?.uncertainty_sources?.find((s: any) => s.type === 'A');
+                  const uASrc = funcPoints[0]?.uncertainty_sources?.find(s => s.type === 'A');
                   if (!uASrc) return null;
                   return (
                     <tr key={`uA-${funcKey}`} className="td-theme hover-bg transition-colors" style={{ borderBottom: bd }}>
@@ -1524,7 +1526,7 @@ function UnifiedResultsTable({
                   );
                 })}
                 {/* Shared Type B sources */}
-                {typeBSources.map((src: any, i: number) => (
+                {typeBSources.map((src, i: number) => (
                   <tr key={`B-${i}`} className="td-theme hover-bg transition-colors" style={{ borderBottom: bd }}>
                     <td className="px-3 py-2 font-medium" style={{ borderRight: bd, color: 'var(--text-main)' }}>
                       <span className="block">{src.source_name}</span>
@@ -1572,10 +1574,10 @@ function UnifiedResultsTable({
   const first = points[0];
 
   // Unique sources from first point (constant across all points for balances)
-  const sources: any[] = first?.uncertainty_sources || [];
+  const sources: UncertaintySource[] = first?.uncertainty_sources || [];
 
   // Helper: check if a numeric extractor gives the same value for every point
-  const isConstant = (fn: (pt: any) => number | undefined) => {
+  const isConstant = (fn: (pt: BudgetPoint) => number | undefined) => {
     const vals = points.map(fn);
     return vals.every(v => v === vals[0]);
   };
@@ -1621,7 +1623,7 @@ function UnifiedResultsTable({
             </thead>
             <tbody>
               {/* Uncertainty sources — values are constant, show once */}
-              {sources.map((src: any, i: number) => (
+              {sources.map((src, i: number) => (
                 <tr key={i} className="td-theme hover-bg transition-colors" style={{ borderBottom: bd }}>
                   <td className="px-3 py-2 font-medium" style={{ borderRight: bd, color: 'var(--text-main)' }}>{src.source_name}</td>
                   <td className="px-3 py-2 text-center" style={{ borderRight: bd }}>{typeBadge(src.type)}</td>
@@ -1696,7 +1698,7 @@ function UnifiedResultsTable({
                 <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-left"
                   style={{ ...thMuted, borderRight: bd, width: 160 }}>Métrica</th>
                 {/* One column per nominal point */}
-                {points.map((pt: any, i: number) => (
+                {points.map((pt, i: number) => (
                   <th key={i} className="px-3 py-2 text-[10px] font-bold text-center"
                     style={{
                       borderLeft: i > 0 ? bd : undefined,
@@ -1713,8 +1715,8 @@ function UnifiedResultsTable({
               {/* ── Auto-detect instrument type from data shape ── */}
               {(() => {
                 // Manometer-specific: has error_ascending / error_descending / hysteresis
-                const hasDescending   = points.some((p: any) => p.error_descending != null);
-                const hasHysteresis   = points.some((p: any) => typeof p.hysteresis === 'number' && p.hysteresis > 0);
+                const hasDescending   = points.some(p => p.error_descending != null);
+                const hasHysteresis   = points.some(p => typeof p.hysteresis === 'number' && p.hysteresis > 0);
                 const errorLabel      = hasDescending ? 'Error ↑ (Asc.)' : 'Error (E)';
                 const hasVarU         = varPerPoint;
 
@@ -1725,7 +1727,7 @@ function UnifiedResultsTable({
                       <td className="px-3 py-2.5 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>
                         {errorLabel}
                       </td>
-                      {points.map((pt: any, i: number) => (
+                      {points.map((pt, i: number) => (
                         <td key={i} className="px-3 py-2.5 text-center font-mono"
                           style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
                           {typeof pt.error === 'number' ? pt.error.toFixed(4) : '0.0000'}
@@ -1740,7 +1742,7 @@ function UnifiedResultsTable({
                         <td className="px-3 py-2.5 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>
                           Error ↓ (Desc.)
                         </td>
-                        {points.map((pt: any, i: number) => (
+                        {points.map((pt, i: number) => (
                           <td key={i} className="px-3 py-2.5 text-center font-mono"
                             style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
                             {pt.error_descending != null ? Number(pt.error_descending).toFixed(4) : '—'}
@@ -1756,7 +1758,7 @@ function UnifiedResultsTable({
                         <td className="px-3 py-2.5 font-semibold" style={{ borderRight: bd, color: '#D97706' }}>
                           Histéresis (h)
                         </td>
-                        {points.map((pt: any, i: number) => (
+                        {points.map((pt, i: number) => (
                           <td key={i} className="px-3 py-2.5 text-center font-mono font-semibold"
                             style={{ borderLeft: i > 0 ? bd : undefined, color: '#D97706' }}>
                             {typeof pt.hysteresis === 'number' ? pt.hysteresis.toFixed(4) : '—'}
@@ -1770,7 +1772,7 @@ function UnifiedResultsTable({
                     {!ucConstant && (
                       <tr className="td-theme" style={{ borderBottom: bd }}>
                         <td className="px-3 py-2.5 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>u_c (Combinada)</td>
-                        {points.map((pt: any, i: number) => (
+                        {points.map((pt, i: number) => (
                           <td key={i} className="px-3 py-2.5 text-center font-mono"
                             style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
                             {pt.combined_uncertainty?.toFixed(5) ?? '—'}
@@ -1784,7 +1786,7 @@ function UnifiedResultsTable({
                     {!kConstant && (
                       <tr className="td-theme" style={{ borderBottom: bd }}>
                         <td className="px-3 py-2.5 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>k (Factor)</td>
-                        {points.map((pt: any, i: number) => (
+                        {points.map((pt, i: number) => (
                           <td key={i} className="px-3 py-2.5 text-center font-mono"
                             style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
                             {pt.k_factor?.toFixed(2) ?? '—'}
@@ -1799,7 +1801,7 @@ function UnifiedResultsTable({
                         <td className="px-3 py-2.5 font-bold" style={{ borderRight: `1px solid ${COLORS.primary}40`, color: COLORS.primary }}>
                           U (Expandida)
                         </td>
-                        {points.map((pt: any, i: number) => (
+                        {points.map((pt, i: number) => (
                           <td key={i} className="px-3 py-2.5 text-center font-mono font-bold"
                             style={{ borderLeft: i > 0 ? `1px solid ${COLORS.primary}40` : undefined, color: COLORS.primary }}>
                             ± {pt.expanded_uncertainty?.toFixed(4) ?? '—'}
@@ -1825,11 +1827,11 @@ function UnifiedResultsTable({
 /* ─── VernierFunctionTable ───────────────────────────────── */
 /* Renders results for a single Vernier function (ext/int/depth). */
 /* The backend returns values in µm internally; we show both µm and mm. */
-function VernierFunctionTable({ points, showBudget = true }: { points: any[]; showBudget?: boolean }) {
+function VernierFunctionTable({ points, showBudget = true }: { points: BudgetPoint[]; showBudget?: boolean }) {
   if (!points || points.length === 0) return null;
 
   const first = points[0];
-  const sources: any[] = first?.uncertainty_sources || [];
+  const sources: UncertaintySource[] = first?.uncertainty_sources || [];
 
   const bd       = '1px solid var(--border-color)';
   const bdStrong = '2px solid var(--border-color)';
@@ -1865,7 +1867,7 @@ function VernierFunctionTable({ points, showBudget = true }: { points: any[]; sh
               </tr>
             </thead>
             <tbody>
-              {sources.map((src: any, i: number) => (
+              {sources.map((src, i: number) => (
                 <tr key={i} className="td-theme hover-bg transition-colors" style={{ borderBottom: bd }}>
                   <td className="px-3 py-2 font-medium" style={{ borderRight: bd, color: 'var(--text-main)' }}>
                     <span className="block">{src.source_name}</span>
@@ -1902,7 +1904,7 @@ function VernierFunctionTable({ points, showBudget = true }: { points: any[]; sh
               <tr style={{ backgroundColor: 'var(--bg-app)', borderBottom: bdStrong }}>
                 <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-left"
                   style={{ ...thMuted, borderRight: bd, width: 160 }}>Métrica</th>
-                {points.map((pt: any, i: number) => (
+                {points.map((pt, i: number) => (
                   <th key={i} className="px-3 py-2 text-[10px] font-bold text-center"
                     style={{
                       borderLeft: i > 0 ? bd : undefined,
@@ -1918,7 +1920,7 @@ function VernierFunctionTable({ points, showBudget = true }: { points: any[]; sh
               {/* Long. patrón (mm) */}
               <tr className="td-theme" style={{ borderBottom: bd }}>
                 <td className="px-3 py-2 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>Patrón l_p (mm)</td>
-                {points.map((pt: any, i: number) => (
+                {points.map((pt, i: number) => (
                   <td key={i} className="px-3 py-2 text-center font-mono" style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
                     {pt.standard_length_mm?.toFixed(4) ?? '—'}
                   </td>
@@ -1928,7 +1930,7 @@ function VernierFunctionTable({ points, showBudget = true }: { points: any[]; sh
               {/* Media l̄_j (mm) */}
               <tr className="td-theme" style={{ borderBottom: bd }}>
                 <td className="px-3 py-2 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>Media l̄_j (mm)</td>
-                {points.map((pt: any, i: number) => (
+                {points.map((pt, i: number) => (
                   <td key={i} className="px-3 py-2 text-center font-mono" style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
                     {pt.mean_mm?.toFixed(4) ?? '—'}
                   </td>
@@ -1938,7 +1940,7 @@ function VernierFunctionTable({ points, showBudget = true }: { points: any[]; sh
               {/* Desviación D_j (µm) */}
               <tr className="td-theme" style={{ borderBottom: bd }}>
                 <td className="px-3 py-2 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>Desv. D_j (µm)</td>
-                {points.map((pt: any, i: number) => (
+                {points.map((pt, i: number) => (
                   <td key={i} className="px-3 py-2 text-center font-mono font-semibold"
                     style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
                     {typeof pt.deviation_um === 'number'
@@ -1952,7 +1954,7 @@ function VernierFunctionTable({ points, showBudget = true }: { points: any[]; sh
               {/* s_j (µm) */}
               <tr className="td-theme" style={{ borderBottom: bd }}>
                 <td className="px-3 py-2 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>Desv. típica s_j (µm)</td>
-                {points.map((pt: any, i: number) => (
+                {points.map((pt, i: number) => (
                   <td key={i} className="px-3 py-2 text-center font-mono" style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-muted)' }}>
                     {pt.std_deviation_um?.toFixed(2) ?? '—'}<span className="text-[9px] opacity-50 ml-0.5">µm</span>
                   </td>
@@ -1962,7 +1964,7 @@ function VernierFunctionTable({ points, showBudget = true }: { points: any[]; sh
               {/* n lecturas */}
               <tr className="td-theme" style={{ borderBottom: bd }}>
                 <td className="px-3 py-2 font-semibold" style={{ borderRight: bd, color: 'var(--text-muted)' }}>n (lecturas)</td>
-                {points.map((pt: any, i: number) => (
+                {points.map((pt, i: number) => (
                   <td key={i} className="px-3 py-2 text-center font-mono" style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-muted)' }}>
                     {pt.n_readings ?? '—'}
                   </td>
@@ -1972,7 +1974,7 @@ function VernierFunctionTable({ points, showBudget = true }: { points: any[]; sh
               {/* u_c */}
               <tr className="td-theme" style={{ borderBottom: bd }}>
                 <td className="px-3 py-2 font-semibold italic" style={{ borderRight: bd, color: 'var(--text-muted)' }}>u_c (µm)</td>
-                {points.map((pt: any, i: number) => (
+                {points.map((pt, i: number) => (
                   <td key={i} className="px-3 py-2 text-center font-mono" style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
                     {pt.combined_uncertainty_um?.toFixed(3) ?? '—'}
                   </td>
@@ -1982,7 +1984,7 @@ function VernierFunctionTable({ points, showBudget = true }: { points: any[]; sh
               {/* k (ν_eff) */}
               <tr className="td-theme" style={{ borderBottom: bd }}>
                 <td className="px-3 py-2 font-semibold italic" style={{ borderRight: bd, color: 'var(--text-muted)' }}>k (Welch-S.)</td>
-                {points.map((pt: any, i: number) => (
+                {points.map((pt, i: number) => (
                   <td key={i} className="px-3 py-2 text-center font-mono" style={{ borderLeft: i > 0 ? bd : undefined, color: 'var(--text-main)' }}>
                     {pt.k_factor?.toFixed(2) ?? '—'}
                   </td>
@@ -1994,7 +1996,7 @@ function VernierFunctionTable({ points, showBudget = true }: { points: any[]; sh
                 <td className="px-3 py-2.5 font-bold" style={{ borderRight: `1px solid ${COLORS.primary}40`, color: COLORS.primary }}>
                   U (µm) / U (mm)
                 </td>
-                {points.map((pt: any, i: number) => (
+                {points.map((pt, i: number) => (
                   <td key={i} className="px-3 py-2.5 text-center font-mono font-bold"
                     style={{ borderLeft: i > 0 ? `1px solid ${COLORS.primary}40` : undefined, color: COLORS.primary }}>
                     ± {pt.expanded_uncertainty_um?.toFixed(2) ?? '—'} µm

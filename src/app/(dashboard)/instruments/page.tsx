@@ -14,6 +14,7 @@ import {
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { isAxiosError } from 'axios';
 import type { Instrument, Standard } from '@/types/calibration';
 import { DataTable } from '@/components/ui/data-table';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -51,6 +52,18 @@ const instrumentSchema = z.object({
   extras_json: z.string().optional(),
 });
 type InstrumentForm = z.infer<typeof instrumentSchema>;
+
+/* ─── Per-type "extras" field descriptor ─────────────────── */
+type ExtraField = {
+  key: string;
+  label: string;
+  type: 'checkbox' | 'select' | 'number' | 'text';
+  hint?: string;
+  placeholder?: string;
+  options?: readonly string[];
+  min?: number;
+  max?: number;
+};
 
 /* ─── Column Actions Cell ────────────────────────────────── */
 function ActionsCell({ inst, onEdit, onDelete }: { inst: Instrument; onEdit: () => void; onDelete: () => void }) {
@@ -292,9 +305,9 @@ function InstrumentModal({ instrument, standards, instruments, onClose }: {
       internal_code: instrument.internal_code, name: instrument.name, brand: instrument.brand,
       model: instrument.model, serial_number: instrument.serial_number, category: instrument.category,
       unit: instrument.unit, resolution: instrument.resolution, range_min: instrument.range_min ?? undefined,
-      range_max: instrument.range_max ?? undefined, location: instrument.location ?? '', status: (instrument.status as any) ?? 'active',
-      emp: (instrument as any).emp ?? undefined,
-      calibration_interval_months: (instrument as any).calibration_interval_months ?? 12,
+      range_max: instrument.range_max ?? undefined, location: instrument.location ?? '', status: (instrument.status as 'active' | 'inactive' | 'in_calibration') ?? 'active',
+      emp: instrument.emp ?? undefined,
+      calibration_interval_months: instrument.calibration_interval_months ?? 12,
     } : { status: 'active', calibration_interval_months: 12 },
   });
 
@@ -309,8 +322,14 @@ function InstrumentModal({ instrument, standards, instruments, onClose }: {
       else { await api.post('/instruments', data); toast.success('Instrumento creado correctamente'); }
       qc.invalidateQueries({ queryKey: ['instruments'] });
       onClose();
-    } catch (err: any) {
-      const first = err.response?.data?.errors ? (Object.values(err.response.data.errors)[0] as string[])[0] : err.response?.data?.message || 'Error al guardar';
+    } catch (err: unknown) {
+      let first = 'Error al guardar';
+      if (isAxiosError(err)) {
+        const errors = err.response?.data?.errors as Record<string, string[]> | undefined;
+        first = errors
+          ? Object.values(errors)[0]?.[0] ?? first
+          : err.response?.data?.message ?? first;
+      }
       toast.error(first);
     }
   };
@@ -453,23 +472,23 @@ function InstrumentModal({ instrument, standards, instruments, onClose }: {
                 {selectedType && selectedType.extras.length > 0 && (
                   <Section title={`Configuración — ${selectedType.label}`} hint="Campos específicos para el procedimiento de calibración">
                     <div className="space-y-3">
-                      {selectedType.extras.map((extra: any) => (
+                      {(selectedType.extras as readonly ExtraField[]).map(extra => (
                         <div key={extra.key}>
                           <label className="text-[10px] font-medium uppercase tracking-wider block mb-1" style={{ color: 'var(--text-muted)' }}>
                             {extra.label}{extra.hint && <span className="ml-2 normal-case tracking-normal opacity-70">— {extra.hint}</span>}
                           </label>
                           {extra.type === 'checkbox' ? (
                             <label className="flex items-center gap-2 cursor-pointer">
-                              <input type="checkbox" className="w-4 h-4 rounded accent-orange-500" {...register('extras_json' as any)} />
+                              <input type="checkbox" className="w-4 h-4 rounded accent-orange-500" {...register('extras_json')} />
                               <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>Habilitado</span>
                             </label>
                           ) : extra.type === 'select' ? (
-                            <select className="field-input" {...register('extras_json' as any)}>
+                            <select className="field-input" {...register('extras_json')}>
                               <option value="">— Seleccionar —</option>
-                              {extra.options.map((o: string) => <option key={o} value={o}>{o}</option>)}
+                              {extra.options?.map(o => <option key={o} value={o}>{o}</option>)}
                             </select>
                           ) : (
-                            <input type={extra.type} placeholder={extra.placeholder} min={extra.min} max={extra.max} className="field-input" {...register('extras_json' as any)} />
+                            <input type={extra.type} placeholder={extra.placeholder} min={extra.min} max={extra.max} className="field-input" {...register('extras_json')} />
                           )}
                         </div>
                       ))}

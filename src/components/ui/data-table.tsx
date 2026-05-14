@@ -3,6 +3,7 @@
 import * as React from 'react';
 import {
   ColumnDef,
+  Column,
   ColumnFiltersState,
   SortingState,
   VisibilityState,
@@ -157,7 +158,7 @@ export function DataTable<TData, TValue>({
               <tr key={hg.id}>
                 {hg.headers.map(header => (
                   <th key={header.id} colSpan={header.colSpan}
-                    id={(header.column.columnDef.meta as any)?.tourId}
+                    id={(header.column.columnDef.meta as { tourId?: string } | undefined)?.tourId}
                     className="px-4 py-2.5 th-theme text-[11px] whitespace-nowrap select-none"
                     style={{ width: header.column.columnDef.size ?? undefined }}>
                     {header.isPlaceholder ? null : (
@@ -238,7 +239,7 @@ export function DataTable<TData, TValue>({
 }
 
 /* ─── Filter Popover ──────────────────────────────────────── */
-function FilterPopover({ column }: { column: any }) {
+function FilterPopover<TData, TValue>({ column }: { column: Column<TData, TValue> }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
   const currentValue = (column.getFilterValue() ?? '') as string;
