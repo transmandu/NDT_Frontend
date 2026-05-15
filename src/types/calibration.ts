@@ -269,6 +269,8 @@ export interface Instrument {
   status: string;
   /** Patrón "de fábrica" preferente para este instrumento (FK a `standards`). */
   factory_standard_id?: number | null;
+  /** Per-type extras (e.g. Vernier function toggles, multimeter mode). Free-form JSON. */
+  metadata?: Record<string, unknown> | null;
 }
 
 /**

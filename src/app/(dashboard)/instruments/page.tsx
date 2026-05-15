@@ -48,8 +48,10 @@ const instrumentSchema = z.object({
   calibration_interval_months: z.coerce.number().int().min(1).max(120).optional().default(12),
   location: z.string().nullable().optional(),
   status: z.enum(['active', 'inactive', 'in_calibration']),
-  factory_standard_id: z.coerce.number().nullable().optional(),
-  extras_json: z.string().optional(),
+  factory_standard_id: z.preprocess(
+    v => (v === '' || v === undefined || v === null) ? null : Number(v),
+    z.number().positive().nullable().optional()
+  ),
 });
 type InstrumentForm = z.infer<typeof instrumentSchema>;
 
@@ -68,43 +70,82 @@ type ExtraField = {
 /* ─── Column Actions Cell ────────────────────────────────── */
 function ActionsCell({ inst, onEdit, onDelete }: { inst: Instrument; onEdit: () => void; onDelete: () => void }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; flipUp: boolean } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const MENU_W = 192; // w-48
+  const MENU_H_EST = 130; // approx height of the 3-item menu + header
+
+  const computePos = () => {
+    if (!btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - r.bottom;
+    const flipUp = spaceBelow < MENU_H_EST + 8;
+    setPos({
+      top: flipUp ? r.top - MENU_H_EST - 4 : r.bottom + 4,
+      left: Math.min(r.right - MENU_W, window.innerWidth - MENU_W - 8),
+      flipUp,
+    });
+  };
+
   useEffect(() => {
-    const close = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    if (open) document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    if (!open) return;
+    computePos();
+    const onClose = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener('mousedown', onClose);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
+    return () => {
+      document.removeEventListener('mousedown', onClose);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onScroll);
+    };
   }, [open]);
 
   return (
-    <div className="relative inline-block" ref={ref}>
-      <button onClick={() => setOpen(v => !v)} className="p-1.5 rounded hover-bg transition-colors" style={{ color: 'var(--text-muted)' }}>
+    <>
+      <button ref={btnRef} onClick={() => setOpen(v => !v)} className="p-1.5 rounded hover-bg transition-colors" style={{ color: 'var(--text-muted)' }}>
         <MoreHorizontal size={15} />
       </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div initial={{ opacity: 0, y: -6, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.95 }} transition={{ duration: 0.1 }}
-            className="absolute right-0 top-full mt-1 w-48 rounded-md shadow-xl z-[60] overflow-hidden flex flex-col py-1"
-            style={{ backgroundColor: 'var(--bg-panel)', border: '1px solid var(--border-color)' }}>
-            <p className="px-3 py-1.5 text-[9px] uppercase font-semibold" style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-color)' }}>Acciones</p>
-            <Link href={`/calibration/new?instrument_id=${inst.id}`} onClick={() => setOpen(false)}
-              className="px-3 py-2 text-xs flex items-center gap-2 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors font-medium"
-              style={{ color: COLORS.primary }}>
-              <Wrench size={13} /> Calibrar Equipo
-            </Link>
-            <button onClick={() => { setOpen(false); onEdit(); }}
-              className="px-3 py-2 text-xs flex items-center gap-2 hover-bg transition-colors w-full text-left"
-              style={{ color: 'var(--text-main)' }}>
-              <Pencil size={13} /> Editar Ficha
-            </button>
-            <button onClick={() => { setOpen(false); onDelete(); }}
-              className="px-3 py-2 text-xs flex items-center gap-2 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors w-full text-left font-medium"
-              style={{ color: COLORS.danger, borderTop: '1px solid var(--border-color)' }}>
-              <Trash2 size={13} /> Eliminar
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+      {typeof window !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {open && pos && (
+            <motion.div
+              ref={menuRef}
+              initial={{ opacity: 0, y: pos.flipUp ? 6 : -6, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: pos.flipUp ? 6 : -6, scale: 0.95 }}
+              transition={{ duration: 0.1 }}
+              className="fixed w-48 rounded-md shadow-xl z-[100] overflow-hidden flex flex-col py-1"
+              style={{ top: pos.top, left: pos.left, backgroundColor: 'var(--bg-panel)', border: '1px solid var(--border-color)' }}>
+              <p className="px-3 py-1.5 text-[9px] uppercase font-semibold" style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-color)' }}>Acciones</p>
+              <Link href={`/calibration/new?instrument_id=${inst.id}`} onClick={() => setOpen(false)}
+                className="px-3 py-2 text-xs flex items-center gap-2 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors font-medium"
+                style={{ color: COLORS.primary }}>
+                <Wrench size={13} /> Calibrar Equipo
+              </Link>
+              <button onClick={() => { setOpen(false); onEdit(); }}
+                className="px-3 py-2 text-xs flex items-center gap-2 hover-bg transition-colors w-full text-left"
+                style={{ color: 'var(--text-main)' }}>
+                <Pencil size={13} /> Editar Ficha
+              </button>
+              <button onClick={() => { setOpen(false); onDelete(); }}
+                className="px-3 py-2 text-xs flex items-center gap-2 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors w-full text-left font-medium"
+                style={{ color: COLORS.danger, borderTop: '1px solid var(--border-color)' }}>
+                <Trash2 size={13} /> Eliminar
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
+    </>
   );
 }
 
@@ -112,7 +153,9 @@ function ActionsCell({ inst, onEdit, onDelete }: { inst: Instrument; onEdit: () 
 function buildColumns(
   onEdit: (i: Instrument) => void,
   onDelete: (i: Instrument) => void,
+  standards: Standard[],
 ): ColumnDef<Instrument>[] {
+  const today = new Date().toISOString().slice(0, 10);
   const statusMap: Record<string, { label: string; color: string }> = {
     active:         { label: 'Operativo',      color: COLORS.success },
     inactive:       { label: 'Inactivo',        color: '#6B7280' },
@@ -178,7 +221,7 @@ function buildColumns(
       accessorKey: 'status',
       header: 'Estado',
       meta: { tourId: 'tour-inst-col-emp' },
-      enableColumnFilter: true, // select filter
+      enableColumnFilter: true,
       cell: ({ getValue }) => {
         const sc = statusMap[getValue<string>()] ?? statusMap.inactive;
         return (
@@ -186,6 +229,37 @@ function buildColumns(
             style={{ backgroundColor: `${sc.color}15`, color: sc.color, border: `1px solid ${sc.color}30` }}>
             {sc.label}
           </span>
+        );
+      },
+    },
+    {
+      id: 'factory_standard',
+      header: 'Patrón',
+      enableSorting: false,
+      enableColumnFilter: false,
+      cell: ({ row }) => {
+        const inst = row.original;
+        if (!inst.factory_standard_id) return <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>—</span>;
+        const std = standards.find(s => s.id === inst.factory_standard_id);
+        if (!std) return <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>—</span>;
+        const expiryStr = std.expiry_date?.slice(0, 10) ?? '';
+        const expired = !!expiryStr && expiryStr < today;
+        const expiryLabel = expiryStr
+          ? new Date(expiryStr).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
+          : '—';
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className="font-mono text-[10px] font-medium" style={{ color: expired ? COLORS.danger : 'var(--text-main)' }}>
+              {std.internal_code}
+            </span>
+            {expired ? (
+              <span className="flex items-center gap-1 text-[9px] font-semibold" style={{ color: COLORS.danger }}>
+                <AlertTriangle size={9} /> VENCIDO {expiryLabel}
+              </span>
+            ) : (
+              <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Vence: {expiryLabel}</span>
+            )}
+          </div>
         );
       },
     },
@@ -234,8 +308,12 @@ export default function InstrumentsPage() {
   });
 
   const columns = useMemo(
-    () => buildColumns(inst => { setEditTarget(inst); setModalOpen(true); }, inst => setDeleteTarget(inst)),
-    []
+    () => buildColumns(
+      inst => { setEditTarget(inst); setModalOpen(true); },
+      inst => setDeleteTarget(inst),
+      standards,
+    ),
+    [standards]
   );
 
   return (
@@ -308,18 +386,56 @@ function InstrumentModal({ instrument, standards, instruments, onClose }: {
       range_max: instrument.range_max ?? undefined, location: instrument.location ?? '', status: (instrument.status as 'active' | 'inactive' | 'in_calibration') ?? 'active',
       emp: instrument.emp ?? undefined,
       calibration_interval_months: instrument.calibration_interval_months ?? 12,
+      factory_standard_id: instrument.factory_standard_id ?? undefined,
     } : { status: 'active', calibration_interval_months: 12 },
   });
+
+  // Per-type extras (Vernier function toggles, multimeter mode, etc). Each input is
+  // tracked independently — the previous implementation shared a single `extras_json`
+  // form key across all inputs, which made the checkboxes overwrite each other and
+  // broke zod validation (boolean from checkbox vs `z.string()` schema → silent fail).
+  const [extras, setExtras] = useState<Record<string, unknown>>(
+    () => (instrument?.metadata as Record<string, unknown> | undefined) ?? {}
+  );
+
+  // Whenever the selected type changes (or on first render with an editType), seed
+  // `extras` with default values for every declared extra. This guarantees that the
+  // `value`/`checked` prop on each input is defined from the very first render and
+  // avoids React's "uncontrolled → controlled" warning.
+  useEffect(() => {
+    if (!selectedType) return;
+    setExtras(prev => {
+      const next = { ...prev };
+      for (const extra of selectedType.extras as readonly ExtraField[]) {
+        if (next[extra.key] === undefined) {
+          next[extra.key] = extra.type === 'checkbox' ? false : '';
+        }
+      }
+      return next;
+    });
+  }, [selectedType]);
 
   useEffect(() => { if (selectedType && !isEdit) { setValue('internal_code', autoCode); setValue('category', selectedType.category); setValue('unit', selectedType.unit); } }, [selectedType, autoCode, isEdit, setValue]);
 
   const selectedUnit = watch('unit');
+  const today = new Date().toISOString().slice(0, 10);
+  const fmtExpiry = (raw: string | null | undefined) => {
+    const d = raw?.slice(0, 10);
+    return d ? new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+  };
+  const isExpiredDate = (raw: string | null | undefined) => !!raw && raw.slice(0, 10) < today;
   const matchingStandards = selectedType ? standards.filter(s => s.category?.toLowerCase() === selectedType.category.toLowerCase()) : [];
+  const validStandards   = matchingStandards.filter(s => !isExpiredDate(s.expiry_date));
+  const expiredStandards = matchingStandards.filter(s => isExpiredDate(s.expiry_date));
+  const selectedStdId = watch('factory_standard_id');
+  const selectedStd = selectedStdId ? matchingStandards.find(s => s.id === Number(selectedStdId)) : null;
+  const selectedIsExpired = isExpiredDate(selectedStd?.expiry_date);
 
   const onSubmit = async (data: InstrumentForm) => {
     try {
-      if (isEdit) { await api.put(`/instruments/${instrument.id}`, data); toast.success('Instrumento actualizado'); }
-      else { await api.post('/instruments', data); toast.success('Instrumento creado correctamente'); }
+      const payload = { ...data, metadata: Object.keys(extras).length > 0 ? extras : null };
+      if (isEdit) { await api.put(`/instruments/${instrument.id}`, payload); toast.success('Instrumento actualizado'); }
+      else { await api.post('/instruments', payload); toast.success('Instrumento creado correctamente'); }
       qc.invalidateQueries({ queryKey: ['instruments'] });
       onClose();
     } catch (err: unknown) {
@@ -479,16 +595,40 @@ function InstrumentModal({ instrument, standards, instruments, onClose }: {
                           </label>
                           {extra.type === 'checkbox' ? (
                             <label className="flex items-center gap-2 cursor-pointer">
-                              <input type="checkbox" className="w-4 h-4 rounded accent-orange-500" {...register('extras_json')} />
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded accent-orange-500"
+                                checked={extras[extra.key] === true}
+                                onChange={e => setExtras(prev => ({ ...prev, [extra.key]: e.target.checked }))}
+                              />
                               <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>Habilitado</span>
                             </label>
                           ) : extra.type === 'select' ? (
-                            <select className="field-input" {...register('extras_json')}>
+                            <select
+                              className="field-input"
+                              value={typeof extras[extra.key] === 'string' ? (extras[extra.key] as string) : ''}
+                              onChange={e => setExtras(prev => ({ ...prev, [extra.key]: e.target.value }))}
+                            >
                               <option value="">— Seleccionar —</option>
                               {extra.options?.map(o => <option key={o} value={o}>{o}</option>)}
                             </select>
                           ) : (
-                            <input type={extra.type} placeholder={extra.placeholder} min={extra.min} max={extra.max} className="field-input" {...register('extras_json')} />
+                            <input
+                              type={extra.type}
+                              placeholder={extra.placeholder}
+                              min={extra.min}
+                              max={extra.max}
+                              className="field-input"
+                              value={
+                                typeof extras[extra.key] === 'string' || typeof extras[extra.key] === 'number'
+                                  ? String(extras[extra.key])
+                                  : ''
+                              }
+                              onChange={e => {
+                                const v = extra.type === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value;
+                                setExtras(prev => ({ ...prev, [extra.key]: v }));
+                              }}
+                            />
                           )}
                         </div>
                       ))}
@@ -499,12 +639,34 @@ function InstrumentModal({ instrument, standards, instruments, onClose }: {
                 <Section title="Patrón de Referencia de Fábrica" hint="(opcional)">
                   {matchingStandards.length === 0 && selectedType
                     ? <p className="text-[11px] py-1" style={{ color: 'var(--text-muted)' }}>No hay patrones para <strong>{selectedType.category}</strong>.</p>
-                    : <Field label="Patrón asociado" error={errors.factory_standard_id?.message}>
-                        <select {...register('factory_standard_id')} className="field-input">
-                          <option value="">— Ninguno / No aplica —</option>
-                          {matchingStandards.map(s => <option key={s.id} value={s.id}>{s.internal_code} — {s.name} (U={s.uncertainty_u}, k={s.k_factor})</option>)}
-                        </select>
-                      </Field>
+                    : <>
+                        <Field label="Patrón asociado" error={errors.factory_standard_id?.message}>
+                          <select {...register('factory_standard_id')} className="field-input">
+                            <option value="">— Ninguno / No aplica —</option>
+                            {validStandards.map(s => (
+                              <option key={s.id} value={s.id}>
+                                {s.internal_code} — {s.name} · Vence: {fmtExpiry(s.expiry_date)} (U={s.uncertainty_u}, k={s.k_factor})
+                              </option>
+                            ))}
+                            {expiredStandards.length > 0 && (
+                              <optgroup label="── VENCIDOS (no recomendado) ──">
+                                {expiredStandards.map(s => (
+                                  <option key={s.id} value={s.id}>
+                                    ⚠ {s.internal_code} — {s.name} · VENCIDO: {fmtExpiry(s.expiry_date)}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                          </select>
+                        </Field>
+                        {selectedIsExpired && (
+                          <div className="mt-2 flex items-start gap-2 rounded px-3 py-2 text-[11px] font-medium"
+                            style={{ backgroundColor: `${COLORS.danger}12`, border: `1px solid ${COLORS.danger}40`, color: COLORS.danger }}>
+                            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                            <span>El patrón seleccionado está <strong>vencido desde {fmtExpiry(selectedStd?.expiry_date)}</strong>. Asigna uno vigente antes de usarlo en una calibración.</span>
+                          </div>
+                        )}
+                      </>
                   }
                 </Section>
               </div>

@@ -273,7 +273,7 @@ export default function CalibrationPage() {
                     <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>{s.technician?.name || 'â€"'}</td>
                     <td className="px-4 py-3 max-w-[200px] truncate" style={{ color: COLORS.danger }} title={s.observation ?? undefined}>{s.observation || 'â€"'}</td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => router.push(`/calibration/${s.id}`)}
+                      <button onClick={() => setReviewingId(s.id)}
                         className="inline-flex items-center gap-1.5 rounded text-[11px] font-medium h-7 px-3 transition-colors"
                         style={{ backgroundColor: '#EF444410', color: COLORS.danger, border: '1px solid #EF444430' }}>
                         <Eye size={14} /> Ver Detalle
