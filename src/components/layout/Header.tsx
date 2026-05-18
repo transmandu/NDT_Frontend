@@ -107,7 +107,7 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
 
   return (
     <header
-      className="h-14 flex items-center justify-between px-4 md:px-6 panel z-20 relative shadow-sm shrink-0"
+      className="h-16 flex items-center justify-between px-4 md:px-6 panel z-20 relative shadow-sm shrink-0"
       style={{ borderBottom: '1px solid var(--border-color)' }}
     >
       {/* Left */}
@@ -117,7 +117,7 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
         </button>
         <div className="flex flex-col justify-center overflow-hidden">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm md:text-base font-bold tracking-tight leading-tight truncate" style={{ color: 'var(--text-main)' }}>
+            <h2 className="text-base md:text-xl font-bold tracking-tight leading-tight truncate" style={{ color: 'var(--text-main)' }}>
               {title}
             </h2>
             {showAutoSave && (
@@ -127,7 +127,7 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
               </span>
             )}
           </div>
-          <p className="text-[8px] md:text-[9px] font-semibold uppercase tracking-wider mt-0.5 truncate hidden sm:block" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-[10px] md:text-[11px] font-semibold uppercase tracking-wider mt-0.5 truncate hidden sm:block" style={{ color: 'var(--text-muted)' }}>
             {subtitle}
           </p>
         </div>

@@ -794,19 +794,20 @@ export default function NewCalibrationPage() {
       { threshold: 0.05, rootMargin: '0px 0px -70% 0px' }
     );
 
-    // Small delay so AnimatePresence elements have time to mount
+    // Delay must be long enough for AnimatePresence to mount the grid sections
+    // (they only appear in the DOM after activeSessionId is set)
     const timer = setTimeout(() => {
       steps.forEach(step => {
         const el = document.getElementById(step.id);
         if (el) observer.observe(el);
       });
-    }, 200);
+    }, 400);
 
     return () => {
       clearTimeout(timer);
       observer.disconnect();
     };
-  }, [steps, budgetResult]);
+  }, [steps, budgetResult, activeSessionId]);
 
   // ─── Scroll to section (native, no scroll-container lookup needed) ───
   const scrollToStep = (stepId: string) => {
