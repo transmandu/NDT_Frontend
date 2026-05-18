@@ -38,7 +38,9 @@ function decodeUnicodeEscapes(value: unknown): unknown {
 // Interceptor: si recibe 401, limpia el store (el layout protegido redirige a /login)
 api.interceptors.response.use(
   (response) => {
-    response.data = decodeUnicodeEscapes(response.data);
+    if (response.config.responseType !== 'blob') {
+      response.data = decodeUnicodeEscapes(response.data);
+    }
     return response;
   },
   (error) => {
