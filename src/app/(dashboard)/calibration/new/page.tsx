@@ -1041,7 +1041,24 @@ export default function NewCalibrationPage() {
                 <InfoChip label="Rango" value={`${selectedInst.range_min ?? 0} — ${selectedInst.range_max ?? '∞'} ${selectedInst.unit}`} />
                 <InfoChip label="S/N" value={selectedInst.serial_number} />
                 <InfoChip label="Ubicación" value={selectedInst.location || '—'} />
+                <InfoChip
+                  label="EMP"
+                  value={selectedInst.emp != null ? `± ${selectedInst.emp} ${selectedInst.unit}` : '—'}
+                />
               </div>
+              {selectedInst.emp == null && (
+                <div className="flex items-start gap-2 px-3 py-2.5 rounded-md text-[11px] mt-2"
+                  style={{ backgroundColor: '#EF444410', border: '1px solid #EF444435', color: '#EF4444' }}>
+                  <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                  <span>
+                    Este instrumento no tiene <strong className="font-semibold">EMP (Error Máximo Permisible)</strong> definido.
+                    Sin él no es posible declarar conformidad al finalizar la calibración.{' '}
+                    <Link href="/instruments" className="underline font-semibold hover:opacity-80 transition-opacity">
+                      Configurarlo en el instrumento →
+                    </Link>
+                  </span>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

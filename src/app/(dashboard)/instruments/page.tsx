@@ -367,7 +367,7 @@ function InstrumentModal({ instrument, standards, instruments, onClose }: {
 }) {
   const qc = useQueryClient();
   const isEdit = !!instrument;
-  const editType = isEdit ? INSTRUMENT_TYPES.find(t => t.category === instrument.category) ?? null : null;
+  const editType = isEdit ? INSTRUMENT_TYPES.find(t => isSameCategory(t.category, instrument.category)) ?? null : null;
   const [selectedType, setSelectedType] = useState<typeof INSTRUMENT_TYPES[number] | null>(editType);
 
   const autoCode = useMemo(() => {
