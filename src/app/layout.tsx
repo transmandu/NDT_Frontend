@@ -5,6 +5,9 @@ import Providers from "./providers";
 export const metadata: Metadata = {
   title: "Orinoco Quality & Control — LIMS",
   description: "Sistema de Gestión de Calibraciones conforme ISO/IEC 17025",
+  icons: {
+    icon: '/logo.jpg',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
