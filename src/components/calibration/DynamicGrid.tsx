@@ -289,7 +289,7 @@ function TransposedMatrix({ grid, data, onChange, validationErrors }: {
                 <div className="flex flex-col gap-0.5 items-start pt-1 pb-0.5">
                   {headerCols.map(hc => (
                     <div key={hc.key} className="h-6 flex items-center justify-start text-[10px] uppercase font-medium tracking-wide" style={{ color: 'var(--text-secondary)' }}>
-                      {hc.label} {hc.unit ? `[${hc.unit}]` : ''}
+                      {hc.label} {hc.unit && !hc.label.includes(hc.unit) ? `[${hc.unit}]` : ''}
                       {hc.required && <span className="text-red-500 text-[8px] ml-1">●</span>}
                     </div>
                   ))}
@@ -326,7 +326,7 @@ function TransposedMatrix({ grid, data, onChange, validationErrors }: {
                   <tr style={{ backgroundColor: 'rgba(255,165,38,0.06)' }}>
                     <td colSpan={pts.length + 1} className="px-3 py-1 text-[10px] font-bold tracking-wide"
                       style={{ borderTop: acIdx > 0 ? '2px solid var(--border-color)' : undefined, color: ORANGE }}>
-                      ▸ {ac.label}{ac.unit && <span className="ml-1 font-normal opacity-60 text-[9px]">({ac.unit})</span>}
+                      ▸ {ac.label}{ac.unit && !ac.label.includes(ac.unit) && <span className="ml-1 font-normal opacity-60 text-[9px]">({ac.unit})</span>}
                     </td>
                   </tr>
                 )}
@@ -370,7 +370,7 @@ function TransposedMatrix({ grid, data, onChange, validationErrors }: {
               <tr key={col.key} style={{ backgroundColor: 'var(--bg-result-row)' }}>
                 <td className="px-3 py-2 text-[11px] font-semibold"
                   style={{ borderRight: '1px solid var(--border-color)', borderTop: '2px solid var(--border-color)', color: ORANGE, whiteSpace: 'nowrap' }}>
-                  {col.label}{col.unit && <span className="text-[9px] opacity-60 ml-1">({col.unit})</span>}
+                  {col.label}{col.unit && !col.label.includes(col.unit) && <span className="text-[9px] opacity-60 ml-1">({col.unit})</span>}
                   <span className="ml-1 text-amber-400 text-[8px]">⚡</span>
                 </td>
                 {pts.map((ptIdx, idx) => {
@@ -555,7 +555,7 @@ function StandardGrid({ grid, data, onChange, validationErrors }: {
                     {col.required && <span className="text-red-500 text-[8px]">●</span>}
                     {col.computed && <span className="text-amber-400 text-[8px]" title="Calculado">⚡</span>}
                   </span>
-                  {col.unit && <span className="text-[9px] font-mono font-normal opacity-50">{col.unit}</span>}
+                  {col.unit && !col.label.includes(col.unit) && <span className="text-[9px] font-mono font-normal opacity-50">{col.unit}</span>}
                 </div>
               </th>
             ))}
@@ -739,7 +739,7 @@ function HorizontalIterationsGrid({ grid, data, onChange, validationErrors }: Dy
           <tr style={{ backgroundColor: 'var(--bg-app)', borderBottom: '1px solid var(--border-color)' }}>
             <th className="px-2 py-2 text-left text-[11px] font-semibold"
               style={{ borderRight: '1px solid var(--border-color)', color: 'var(--text-main)', width: 90 }}>
-              {editableCol.label} {editableCol.unit && <span className="font-mono opacity-50 text-[9px]">({editableCol.unit})</span>}
+              {editableCol.label} {editableCol.unit && !editableCol.label.includes(editableCol.unit) && <span className="font-mono opacity-50 text-[9px]">({editableCol.unit})</span>}
             </th>
             {rowKeys.map(rIdx => (
               <th key={rIdx} className="py-2 px-1 text-center font-mono text-[11px]"
