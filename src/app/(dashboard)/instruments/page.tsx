@@ -16,6 +16,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { isAxiosError } from 'axios';
 import type { Instrument, Standard } from '@/types/calibration';
+import { isSameCategory } from '@/lib/categoryUtils';
 import { DataTable } from '@/components/ui/data-table';
 import type { ColumnDef } from '@tanstack/react-table';
 
@@ -424,7 +425,7 @@ function InstrumentModal({ instrument, standards, instruments, onClose }: {
     return d ? new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
   };
   const isExpiredDate = (raw: string | null | undefined) => !!raw && raw.slice(0, 10) < today;
-  const matchingStandards = selectedType ? standards.filter(s => s.category?.toLowerCase() === selectedType.category.toLowerCase()) : [];
+  const matchingStandards = selectedType ? standards.filter(s => isSameCategory(s.category, selectedType.category)) : [];
   const validStandards   = matchingStandards.filter(s => !isExpiredDate(s.expiry_date));
   const expiredStandards = matchingStandards.filter(s => isExpiredDate(s.expiry_date));
   const selectedStdId = watch('factory_standard_id');

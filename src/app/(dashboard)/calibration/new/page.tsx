@@ -365,9 +365,7 @@ export default function NewCalibrationPage() {
       const factoryMatch = filteredStandards.find(s => s.id === selectedInst.factory_standard_id);
       if (factoryMatch) { setSelectedStandard(String(factoryMatch.id)); return; }
     }
-    // 2. Auto-select if only one standard matches the category
-    if (filteredStandards.length === 1) { setSelectedStandard(String(filteredStandards[0].id)); return; }
-    // 3. Clear selection that no longer belongs to this instrument
+    // 2. Clear selection — instrument has no factory standard affiliated
     setSelectedStandard('');
   }, [selectedInstrument, filteredStandards]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -948,6 +946,32 @@ export default function NewCalibrationPage() {
                 </option>
               ))}
             </select>
+
+            {/* ── No factory standard affiliated warning ───── */}
+            <AnimatePresence>
+              {selectedInst && filteredStandards.length > 0 && !selectedInst.factory_standard_id && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, height: 0 }}
+                  animate={{ opacity: 1, y: 0, height: 'auto' }}
+                  exit={{ opacity: 0, y: -6, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <div className="flex items-start gap-2 px-3 py-2.5 rounded-md text-[11px] mt-1"
+                    style={{ backgroundColor: '#F59E0B10', border: '1px solid #F59E0B35', color: '#F59E0B' }}>
+                    <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                    <span>
+                      Este instrumento no tiene un <strong className="font-semibold">patrón de fábrica afiliado</strong>.{' '}
+                      Asígnale uno desde el{' '}
+                      <Link href="/instruments" className="underline font-semibold hover:opacity-80 transition-opacity">
+                        módulo de instrumentos
+                      </Link>{' '}
+                      para poder iniciar una calibración.
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* ── No-standards warning ─────────────────────── */}
             <AnimatePresence>
