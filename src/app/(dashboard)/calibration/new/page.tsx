@@ -348,6 +348,9 @@ export default function NewCalibrationPage() {
     ? standards.filter((s: Standard) => isSameCategory(s.category, selectedInst.category))
     : standards;
 
+  // Standards for humidity (second slot, M-LAB-01 only)
+  const humidityStandards: Standard[] = standards.filter((s: Standard) => isSameCategory(s.category, 'humedad'));
+
   // Auto-preselect factory_standard when instrument changes (skipped when selection already valid)
   useEffect(() => {
     if (!selectedInst) return;
@@ -368,6 +371,23 @@ export default function NewCalibrationPage() {
     // 2. Clear selection — instrument has no factory standard affiliated
     setSelectedStandard('');
   }, [selectedInstrument, filteredStandards]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-preselect humidity standard (selectedStandard2) for M-LAB-01
+  useEffect(() => {
+    if (!selectedInst || procedureCode !== 'M-LAB-01') return;
+
+    if (selectedStandard2) {
+      const stillValid = humidityStandards.some(s => String(s.id) === selectedStandard2);
+      if (stillValid) return;
+    }
+
+    const affiliatedId = Number(selectedInst.metadata?.factory_standard_humidity_id);
+    if (affiliatedId) {
+      const match = humidityStandards.find(s => s.id === affiliatedId);
+      if (match) { setSelectedStandard2(String(match.id)); return; }
+    }
+    setSelectedStandard2('');
+  }, [selectedInstrument, procedureCode, humidityStandards]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-preload metadata fields from instrument + standard in DB ──────────
   // Runs whenever both instrument and standard are resolved (selectedInst/selectedStd change).
@@ -1017,14 +1037,23 @@ export default function NewCalibrationPage() {
                 className="w-full h-9 px-3 rounded input-theme text-xs"
               >
                 <option value="">— Seleccione Patrón de HR —</option>
-                {standards
-                  .filter((s: Standard) => String(s.id) !== selectedStandard)
-                  .map((s: Standard) => (
-                    <option key={s.id} value={s.id}>
-                      {s.internal_code} — {s.name} (U={s.uncertainty_u}, k={s.k_factor})
-                    </option>
-                  ))}
+                {humidityStandards.map((s: Standard) => (
+                  <option key={s.id} value={s.id}>
+                    {s.internal_code} — {s.name} (U={s.uncertainty_u}, k={s.k_factor})
+                  </option>
+                ))}
               </select>
+              {selectedInst && !selectedInst.metadata?.factory_standard_humidity_id && (
+                <div className="flex items-start gap-2 px-3 py-2 rounded-md text-[11px] mt-1.5"
+                  style={{ backgroundColor: '#F59E0B10', border: '1px solid #F59E0B35', color: '#F59E0B' }}>
+                  <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                  <span>
+                    Este instrumento no tiene un <strong className="font-semibold">patrón de HR afiliado</strong>.{' '}
+                    Asígnalo en el{' '}
+                    <Link href="/instruments" className="underline font-semibold hover:opacity-80">módulo de instrumentos</Link>.
+                  </span>
+                </div>
+              )}
               <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
                 Patrón independiente para humedad relativa (std[1] → u_HR_cert/k). ISO 17025 §6.4.
               </p>

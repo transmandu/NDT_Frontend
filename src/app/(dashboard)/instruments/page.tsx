@@ -432,6 +432,12 @@ function InstrumentModal({ instrument, standards, instruments, onClose }: {
   const selectedStd = selectedStdId ? matchingStandards.find(s => s.id === Number(selectedStdId)) : null;
   const selectedIsExpired = isExpiredDate(selectedStd?.expiry_date);
 
+  // Second standard (humidity) — only for M-LAB-01 (Termohigrómetro)
+  const isThermohygrometer = selectedType?.code === 'M-LAB-01';
+  const humidityStandards  = standards.filter(s => isSameCategory(s.category, 'humedad'));
+  const humidityStdId      = Number(extras.factory_standard_humidity_id) || '';
+  const setHumidityStd     = (id: string) => setExtras(prev => ({ ...prev, factory_standard_humidity_id: id || undefined }));
+
   const onSubmit = async (data: InstrumentForm) => {
     try {
       const payload = { ...data, metadata: Object.keys(extras).length > 0 ? extras : null };
@@ -641,7 +647,7 @@ function InstrumentModal({ instrument, standards, instruments, onClose }: {
                   {matchingStandards.length === 0 && selectedType
                     ? <p className="text-[11px] py-1" style={{ color: 'var(--text-muted)' }}>No hay patrones para <strong>{selectedType.category}</strong>.</p>
                     : <>
-                        <Field label="Patrón asociado" error={errors.factory_standard_id?.message}>
+                        <Field label={isThermohygrometer ? 'Patrón Temperatura (principal)' : 'Patrón asociado'} error={errors.factory_standard_id?.message}>
                           <select {...register('factory_standard_id')} className="field-input">
                             <option value="">— Ninguno / No aplica —</option>
                             {validStandards.map(s => (
@@ -669,6 +675,32 @@ function InstrumentModal({ instrument, standards, instruments, onClose }: {
                         )}
                       </>
                   }
+
+                  {/* ── Second standard: Humidity (M-LAB-01 only) ── */}
+                  {isThermohygrometer && (
+                    <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-color)' }}>
+                      <Field label="Patrón Humedad Relativa (secundario)">
+                        {humidityStandards.length === 0
+                          ? <p className="text-[11px] py-1" style={{ color: 'var(--text-muted)' }}>No hay patrones de humedad registrados.</p>
+                          : <select
+                              value={humidityStdId}
+                              onChange={e => setHumidityStd(e.target.value)}
+                              className="field-input"
+                            >
+                              <option value="">— Ninguno / No aplica —</option>
+                              {humidityStandards.map(s => (
+                                <option key={s.id} value={s.id}>
+                                  {s.internal_code} — {s.name} · Vence: {fmtExpiry(s.expiry_date)} (U={s.uncertainty_u}, k={s.k_factor})
+                                </option>
+                              ))}
+                            </select>
+                        }
+                      </Field>
+                      <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                        Patrón independiente para la magnitud Humedad Relativa (std[1]). ISO 17025 §6.4.
+                      </p>
+                    </div>
+                  )}
                 </Section>
               </div>
 
