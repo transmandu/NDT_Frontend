@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <clipPath id="flask-clip">
+      <path d="M13 5 H19 V13 L27 27 H5 L13 13 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect width="32" height="32" rx="7" fill="#0b1426"/>
+
+  <!-- Subtle flask body fill -->
+  <path d="M13 5 H19 V13 L27 27 H5 L13 13 Z" fill="rgba(255,255,255,0.06)"/>
+
+  <!-- Liquid (indigo, clipped to flask shape) -->
+  <rect x="0" y="20" width="32" height="12" fill="#6366F1" opacity="0.9" clip-path="url(#flask-clip)"/>
+
+  <!-- Flask outline -->
+  <path d="M13 5 H19 V13 L27 27 H5 L13 13 Z" fill="none" stroke="white" stroke-width="1.6" stroke-linejoin="round"/>
+
+  <!-- Top rim / opening -->
+  <rect x="11" y="3.5" width="10" height="2.5" rx="1.2" fill="white"/>
+</svg>
