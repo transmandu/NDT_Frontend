@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import api from '@/lib/api';
-import { Plus, X, Loader2, Shield, User as UserIcon, Eye, EyeOff } from 'lucide-react';
+import { Plus, X, Loader2, Shield, User as UserIcon, Eye, EyeOff, MoreHorizontal, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { isAxiosError } from 'axios';
@@ -43,8 +43,51 @@ const userSchema = z.object({
 });
 type UserForm = z.infer<typeof userSchema>;
 
+/* ─── Row Actions Dropdown ────────────────────────────────── */
+function ActionsDropdown({ user, onEdit, onDelete }: { user: User; onEdit: (u: User) => void; onDelete: (u: User) => void }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative flex justify-end">
+      <button
+        onClick={() => setOpen(v => !v)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        className="w-7 h-7 rounded flex items-center justify-center transition-colors hover-bg"
+        style={{ color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}
+      >
+        <MoreHorizontal size={14} />
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 top-8 z-50 w-36 rounded-lg shadow-xl overflow-hidden"
+          style={{ backgroundColor: 'var(--bg-panel)', border: '1px solid var(--border-color)' }}
+        >
+          <button
+            onClick={() => { setOpen(false); onEdit(user); }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-medium transition-colors hover-bg text-left"
+            style={{ color: 'var(--text-main)' }}
+          >
+            <Pencil size={12} /> Editar
+          </button>
+          <div style={{ height: '1px', backgroundColor: 'var(--border-color)' }} />
+          <button
+            onClick={() => { setOpen(false); onDelete(user); }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-medium transition-colors text-left"
+            style={{ color: '#ef4444' }}
+            onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.08)')}
+            onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+          >
+            <Trash2 size={12} /> Eliminar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Columns ─────────────────────────────────────────────── */
-function buildColumns(onEdit: (u: User) => void): ColumnDef<User>[] {
+function buildColumns(onEdit: (u: User) => void, onDelete: (u: User) => void): ColumnDef<User>[] {
   return [
     {
       accessorKey: 'name',
@@ -81,14 +124,8 @@ function buildColumns(onEdit: (u: User) => void): ColumnDef<User>[] {
       cell: ({ getValue }) => <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(getValue() as string).toLocaleDateString('es')}</span>,
     },
     {
-      id: 'actions', header: '', enableSorting: false, enableColumnFilter: false, size: 80,
-      cell: ({ row }) => (
-        <button onClick={() => onEdit(row.original)}
-          className="h-7 px-3 text-[11px] rounded font-medium transition-colors hover-bg"
-          style={{ color: 'var(--text-main)', border: '1px solid var(--border-color)' }}>
-          Editar
-        </button>
-      ),
+      id: 'actions', header: '', enableSorting: false, enableColumnFilter: false, size: 48,
+      cell: ({ row }) => <ActionsDropdown user={row.original} onEdit={onEdit} onDelete={onDelete} />,
     },
   ];
 }
@@ -103,8 +140,9 @@ type UserPayload = {
 };
 
 export default function UsersPage() {
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editUser, setEditUser]   = useState<User | null>(null);
+  const [modalOpen, setModalOpen]       = useState(false);
+  const [editUser, setEditUser]         = useState<User | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
   const qc = useQueryClient();
 
   const { data: users = [], isLoading } = useQuery<User[]>({
@@ -131,7 +169,25 @@ export default function UsersPage() {
     },
   });
 
-  const columns = buildColumns(u => { setEditUser(u); setModalOpen(true); });
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => api.delete(`/admin/users/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      toast.success('Usuario eliminado correctamente');
+      setDeleteTarget(null);
+    },
+    onError: (err: unknown) => {
+      const msg = isAxiosError(err)
+        ? (err.response?.data?.message ?? 'Error al eliminar el usuario')
+        : 'Error al eliminar el usuario';
+      toast.error(msg);
+    },
+  });
+
+  const columns = buildColumns(
+    u => { setEditUser(u); setModalOpen(true); },
+    u => setDeleteTarget(u),
+  );
 
   return (
     <div className="space-y-3 w-full animate-fadeIn">
@@ -167,8 +223,68 @@ export default function UsersPage() {
           />
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {deleteTarget && (
+          <DeleteConfirmModal
+            user={deleteTarget}
+            onClose={() => setDeleteTarget(null)}
+            onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+            deleting={deleteMut.isPending}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
+}
+
+/* ─── Delete Confirm Modal ───────────────────────────────── */
+function DeleteConfirmModal({ user, onClose, onConfirm, deleting }: {
+  user: User; onClose: () => void; onConfirm: () => void; deleting: boolean;
+}) {
+  const modal = (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }} transition={{ duration: 0.18 }}
+        className="w-full max-w-sm rounded-xl shadow-2xl overflow-hidden"
+        style={{ backgroundColor: 'var(--bg-panel)', border: '1px solid var(--border-color)' }}>
+
+        <div className="px-6 py-5 flex flex-col items-center text-center gap-3">
+          <div className="w-11 h-11 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: 'rgba(239,68,68,0.12)' }}>
+            <AlertTriangle size={22} style={{ color: '#ef4444' }} />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--text-main)' }}>Eliminar usuario</h3>
+            <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+              ¿Estás seguro de que deseas eliminar a <strong style={{ color: 'var(--text-main)' }}>{user.name}</strong>?<br />
+              Esta acción no se puede deshacer.
+            </p>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 flex items-center justify-end gap-3"
+          style={{ borderTop: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}>
+          <button onClick={onClose} disabled={deleting}
+            className="h-8 px-4 rounded text-[11px] font-medium transition-colors hover-bg"
+            style={{ color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}>
+            Cancelar
+          </button>
+          <button onClick={onConfirm} disabled={deleting}
+            className="h-8 px-5 rounded text-[11px] font-semibold text-white flex items-center gap-2 disabled:opacity-60 transition-opacity"
+            style={{ backgroundColor: '#ef4444' }}>
+            {deleting && <Loader2 size={12} className="animate-spin" />}
+            Sí, eliminar
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+
+  return createPortal(modal, document.body);
 }
 
 /* ─── User Modal ─────────────────────────────────────────── */
