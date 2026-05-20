@@ -7,7 +7,7 @@ import api from '@/lib/api';
 import { isAxiosError } from 'axios';
 import { motion } from 'framer-motion';
 import { C } from '@/lib/colors';
-import { Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, ShieldCheck, Sun, Moon } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -15,10 +15,27 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isDark, setIsDark] = useState(false);
   const { isAuthenticated, setAuth } = useAuthStore();
   const router = useRouter();
 
   useEffect(() => { if (isAuthenticated) router.replace('/dashboard'); }, [isAuthenticated, router]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('theme-mode');
+    const dark = saved === 'dark';
+    setIsDark(dark);
+    document.body.classList.remove('theme-light', 'theme-dark');
+    document.body.classList.add(dark ? 'theme-dark' : 'theme-light');
+  }, []);
+
+  const toggleTheme = () => {
+    const next = !isDark;
+    setIsDark(next);
+    document.body.classList.remove('theme-light', 'theme-dark');
+    document.body.classList.add(next ? 'theme-dark' : 'theme-light');
+    localStorage.setItem('theme-mode', next ? 'dark' : 'light');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +51,22 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'var(--bg-app)' }}>
+    <div className="min-h-screen flex items-center justify-center p-4 relative" style={{ backgroundColor: 'var(--bg-app)' }}>
+
+      {/* Dark mode toggle */}
+      <button
+        onClick={toggleTheme}
+        className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+        style={{
+          backgroundColor: 'var(--bg-panel)',
+          border: '1px solid var(--border-color)',
+          color: 'var(--text-muted)',
+        }}
+        title={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+      >
+        {isDark ? <Sun size={15} /> : <Moon size={15} />}
+      </button>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
