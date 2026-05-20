@@ -45,7 +45,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl font-bold text-white text-xl shadow-lg mx-auto mb-4" style={{ backgroundColor: '#FFA526' }}>
             OQC
           </div>
-          <h1 className="text-xl font-bold tracking-tight" style={{ color: '#FF4712' }}>Transmandu</h1>
+          <h1 className="text-xl font-bold tracking-tight" style={{ color: '#FF4712' }}>Orinoco Quality &amp; Control</h1>
           <p className="text-[10px] uppercase tracking-widest font-semibold mt-1" style={{ color: 'var(--text-muted)' }}>Lab NDT · ISO/IEC 17025</p>
         </div>
 
