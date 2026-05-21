@@ -104,6 +104,17 @@ export default function NewCalibrationPage() {
   // ── Certificate dates (static fields — not driven by schema) ──
   const [calibrationDate, setCalibrationDate]         = useState(() => new Date().toISOString().split('T')[0]);
   const [nextCalibrationDate, setNextCalibrationDate] = useState('');
+
+  // Minimum allowed next calibration date: 3 months after the calibration date
+  const minNextCalibrationDate = (() => {
+    const d = new Date(calibrationDate);
+    d.setMonth(d.getMonth() + 3);
+    return d.toISOString().split('T')[0];
+  })();
+  const nextCalibrationMonths = nextCalibrationDate
+    ? Math.round((new Date(nextCalibrationDate).getTime() - new Date(calibrationDate).getTime()) / (1000 * 60 * 60 * 24 * 30.44))
+    : null;
+  const nextCalibrationTooSoon = !!nextCalibrationDate && nextCalibrationDate < minNextCalibrationDate;
   const [technicianObservation, setTechnicianObservation] = useState('');
   const [tempUncertainty, setTempUncertainty]         = useState('1.0'); // ±°C
 
@@ -654,6 +665,10 @@ export default function NewCalibrationPage() {
       return false;
     }
     if (!nextCalibrationDate) { toast.error('Indique la fecha de próxima calibración'); return false; }
+    if (nextCalibrationDate < minNextCalibrationDate) {
+      toast.error('La próxima calibración debe ser al menos 3 meses después de la fecha de calibración');
+      return false;
+    }
 
     // Validate environmental requirements
     const metaReqs = matchedSchema?.ui_schema?.metadata_requirements || [];
@@ -1285,14 +1300,16 @@ export default function NewCalibrationPage() {
                       type="date"
                       value={nextCalibrationDate}
                       onChange={e => setNextCalibrationDate(e.target.value)}
-                      min={calibrationDate}
+                      min={minNextCalibrationDate}
                       className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono"
-                      style={!nextCalibrationDate ? { border: '1px solid #EF444460' } : undefined}
+                      style={(!nextCalibrationDate || nextCalibrationTooSoon) ? { border: '1px solid #EF444460' } : undefined}
                     />
-                    <span className="text-[9px]" style={{ color: nextCalibrationDate ? 'var(--text-muted)' : '#EF4444' }}>
-                      {nextCalibrationDate
-                        ? `Intervalo: ${Math.round((new Date(nextCalibrationDate).getTime() - new Date(calibrationDate).getTime()) / (1000 * 60 * 60 * 24 * 30))} meses`
-                        : 'Requerido — se imprime en el certificado ISO 17025'}
+                    <span className="text-[9px]" style={{ color: nextCalibrationTooSoon ? '#EF4444' : nextCalibrationDate ? 'var(--text-muted)' : '#EF4444' }}>
+                      {nextCalibrationTooSoon
+                        ? `Mínimo 3 meses desde la fecha de calibración (desde ${minNextCalibrationDate})`
+                        : nextCalibrationDate
+                          ? `Intervalo: ${nextCalibrationMonths} meses`
+                          : 'Requerido — mínimo 3 meses. Se imprime en el certificado ISO 17025'}
                     </span>
                   </div>
                 </div>
