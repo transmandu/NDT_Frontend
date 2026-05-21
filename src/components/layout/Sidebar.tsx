@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Home, FileBarChart, Wrench, ShieldCheck, ClipboardCheck,
-  ChevronDown, ChevronLeft, ChevronRight, User, Users, FileCode2
+  ChevronDown, ChevronLeft, ChevronRight, User, Users, FileCode2, ScrollText
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -111,6 +111,7 @@ export default function Sidebar({ isOpen, onToggle }: { isOpen: boolean; onToggl
               <div className="space-y-0.5">
                 <NavItem href="/admin/users" icon={<Users size={14} />} label="Usuarios" />
                 <NavItem href="/schemas"      icon={<FileCode2 size={14} />} label="Esquemas" />
+                <NavItem href="/audit-log"    icon={<ScrollText size={14} />} label="Bitácora" />
               </div>
             </div>
           )}
