@@ -192,7 +192,7 @@ export default function CalibrationReview({ id, onBack }: { id: number; onBack: 
 
   /* ────────────────────────────────────────────────────────── */
   return (
-    <div className="w-full space-y-5 animate-fadeIn max-w-[1400px] mx-auto">
+    <div className="w-full space-y-5 animate-fadeIn max-w-350 mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <button onClick={onBack}
@@ -643,7 +643,7 @@ function ResultsTable({
       border: highlight ? '2px solid rgba(255,165,38,0.3)' : '1px solid var(--border-color)',
       boxShadow: highlight ? '0 0 20px rgba(255,165,38,0.06)' : 'none',
     }}>
-      <table className="w-full text-xs text-left min-w-[500px]">
+      <table className="w-full text-xs text-left min-w-125">
         <thead className="th-theme"><tr>
           {columns.map((col) => (
             <th
@@ -658,7 +658,7 @@ function ResultsTable({
           {results.map((r, i) => (
             <motion.tr key={i}
               initial={highlight ? { backgroundColor: 'rgba(255,165,38,0.1)' } : {}}
-              animate={{ backgroundColor: 'transparent' }}
+              animate={{ backgroundColor: 'rgba(0, 0, 0, 0)' }}
               transition={{ delay: i * 0.08, duration: 0.8 }}>
               {columns.map((col) => (
                 <td
