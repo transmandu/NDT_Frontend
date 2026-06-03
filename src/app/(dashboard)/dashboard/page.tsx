@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -6,7 +7,7 @@ import api from '@/lib/api';
 import type { CalibrationSession, Standard } from '@/types/calibration';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, AlertTriangle, CheckCircle2, MoreHorizontal, PieChart as PieChartIcon, Activity, Zap } from 'lucide-react';
+import { Clock, AlertTriangle, CheckCircle2, MoreHorizontal, Activity, Zap } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 import { C } from '@/lib/colors';
@@ -36,21 +37,13 @@ export default function DashboardPage() {
   const in30Days = new Date();
   in30Days.setDate(today.getDate() + 30);
 
-  let stdValid = 0, stdWarning = 0, stdExpired = 0;
+  let  stdWarning = 0, stdExpired = 0;
   standards.forEach(s => {
     if(!s.expiry_date) return;
     const exp = new Date(s.expiry_date);
     if(exp < today) stdExpired++;
     else if(exp <= in30Days) stdWarning++;
-    else stdValid++;
   });
-
-  const chartData = [
-    { name: 'Aprobados', value: stats.approved, fill: COLORS.success },
-    { name: 'En Revisión', value: stats.pending, fill: COLORS.primary },
-    { name: 'Borradores', value: stats.drafts, fill: COLORS.draft },
-    { name: 'Rechazados', value: stats.rejected, fill: COLORS.danger },
-  ].filter(item => item.value > 0);
 
   const last7Days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
@@ -91,14 +84,14 @@ export default function DashboardPage() {
         
 
         {/* Chart 2: Recent Activity (Bar Chart) */}
-        <div className="lg:col-span-1 panel rounded-md shadow-sm overflow-hidden flex flex-col h-[280px]">
+        <div className="lg:col-span-1 panel rounded-md shadow-sm overflow-hidden flex flex-col h-70">
           <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-panel)' }}>
             <Activity size={14} style={{ color: 'var(--text-muted)' }} />
             <h3 className="text-xs font-semibold" style={{ color: 'var(--text-main)' }}>Actividad de la Semana</h3>
           </div>
           
           <div className="flex-1 p-4 flex flex-col justify-center">
-            <div className="w-full h-full min-h-[160px]">
+            <div className="w-full h-45 min-h-40">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={activityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
@@ -127,7 +120,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Chart 3: Conformidad */}
-        <div className="lg:col-span-1 panel rounded-md shadow-sm overflow-hidden flex flex-col h-[280px]">
+        <div className="lg:col-span-1 panel rounded-md shadow-sm overflow-hidden flex flex-col h-70">
           <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-panel)' }}>
             <Zap size={14} style={{ color: 'var(--text-muted)' }} />
             <h3 className="text-xs font-semibold" style={{ color: 'var(--text-main)' }}>Tasa de Conformidad</h3>
@@ -137,7 +130,7 @@ export default function DashboardPage() {
             {totalConcluded === 0 ? (
               <div className="text-center text-[11px] text-gray-500">Sin equipos concluidos</div>
             ) : (
-              <div className="w-full h-full min-h-[160px] relative flex items-center justify-center">
+              <div className="w-full h-full min-h-40 relative flex items-center justify-center">
                 <div className="absolute inset-0">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -181,20 +174,20 @@ export default function DashboardPage() {
 
       {/* Bottom Row: Recent Activity Table */}
       <div className="w-full lg:w-[65%]">
-        <div id="tour-dashboard-recent" className="panel rounded-md shadow-sm overflow-hidden flex flex-col min-h-[280px] w-full">
-          <div className="px-4 py-3 flex justify-between items-center bg-[var(--bg-panel)] shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
+        <div id="tour-dashboard-recent" className="panel rounded-md shadow-sm overflow-hidden flex flex-col min-h-70 w-full">
+          <div className="px-4 py-3 flex justify-between items-center bg-(--bg-panel) shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
             <div>
               <h3 className="text-xs font-semibold" style={{ color: 'var(--text-main)' }}>Seguimiento Administrativo</h3>
               <p className="text-[10px] hidden sm:block" style={{ color: 'var(--text-muted)' }}>Flujo de trabajo de las últimas sesiones registradas en el laboratorio.</p>
             </div>
-            <Link href="/calibration" className="text-[10px] font-medium hover:underline flex-shrink-0" style={{ color: COLORS.primary }}>
+            <Link href="/calibration" className="text-[10px] font-medium hover:underline shrink-0" style={{ color: COLORS.primary }}>
               Abrir Registro Visual →
             </Link>
           </div>
           
           <div className="flex-1 overflow-x-auto overflow-y-auto">
-            <table className="w-full text-left text-xs min-w-[500px]">
-              <thead className="sticky top-0 z-10 bg-[var(--bg-panel)] shadow-sm">
+            <table className="w-full text-left text-xs min-w-150">
+              <thead className="sticky top-0 z-10 bg-(--bg-panel) shadow-sm">
                 <tr>
                   <th className="px-4 py-2 th-theme text-[10px] uppercase tracking-wider whitespace-nowrap">Expediente</th>
                   <th className="px-4 py-2 th-theme text-[10px] uppercase tracking-wider whitespace-nowrap">Equipo</th>
@@ -265,9 +258,9 @@ function ActivityRow({ id, inst, date, status, color, rawId }: { id: string; ins
   }, [isOpen]);
 
   return (
-    <tr className="td-theme hover-bg transition-colors border-b last:border-0 border-[var(--border-color)]">
+    <tr className="td-theme hover-bg transition-colors border-b last:border-0 border-(--border-color)">
       <td className="px-4 py-3 font-mono text-[11px] whitespace-nowrap text-blue-600 dark:text-blue-400 font-medium">{id}</td>
-      <td className="px-4 py-3 font-medium whitespace-nowrap truncate max-w-[200px] text-[11px] text-[var(--text-main)]">{inst}</td>
+      <td className="px-4 py-3 font-medium whitespace-nowrap truncate max-w-50 text-[11px] text-(--text-main)">{inst}</td>
       <td className="px-4 py-3 whitespace-nowrap text-[10px]" style={{ color: 'var(--text-muted)' }}>{date}</td>
       <td className="px-4 py-3">
         <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider whitespace-nowrap"
@@ -292,7 +285,7 @@ function ActivityRow({ id, inst, date, status, color, rawId }: { id: string; ins
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -5, scale: 0.95 }}
                 transition={{ duration: 0.1 }}
-                className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-[#1E232B] border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-[60] flex flex-col py-1"
+                className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-[#1E232B] border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-60 flex flex-col py-1"
               >
                 <p className="px-3 py-1.5 text-[9px] uppercase font-semibold border-b border-gray-100 dark:border-gray-800" style={{ color: 'var(--text-muted)' }}>Opciones de Trámite</p>
                 <Link href={`/calibration?review=${rawId}`} className="px-3 py-2 text-xs text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors" style={{ color: 'var(--text-main)' }}>
