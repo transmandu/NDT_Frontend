@@ -1,22 +1,44 @@
-'use client';
+"use client";
 
-import { useTheme } from '@/components/layout/ThemeProvider';
-import { useAuthStore } from '@/stores/authStore';
-import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Sun, Moon, Menu, MapPin, CloudSun, Droplets, Save, LogOut,
-         ClipboardCheck, AlertCircle, Clock, X, CheckCircle2, HelpCircle, Zap, BookOpen,
-         Cloud, CloudRain, CloudLightning, CloudSnow, CloudFog, Loader2 } from 'lucide-react';
-import { useState, useEffect, useRef, useCallback } from 'react';
-import api from '@/lib/api';
-import { useWeather } from '@/lib/useWeather';
-import { usePathname } from 'next/navigation';
-import { useTutorial } from '@/lib/tutorials/useTutorial';
+import { useTheme } from "@/components/layout/ThemeProvider";
+import { useAuthStore } from "@/stores/authStore";
+import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Bell,
+  Sun,
+  Moon,
+  Menu,
+  MapPin,
+  CloudSun,
+  Droplets,
+  Save,
+  LogOut,
+  ClipboardCheck,
+  AlertCircle,
+  Clock,
+  X,
+  CheckCircle2,
+  HelpCircle,
+  Zap,
+  BookOpen,
+  Cloud,
+  CloudRain,
+  CloudLightning,
+  CloudSnow,
+  CloudFog,
+  Loader2,
+} from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import api from "@/lib/api";
+import { useWeather } from "@/lib/useWeather";
+import { usePathname } from "next/navigation";
+import { useTutorial } from "@/lib/tutorials/useTutorial";
 
 interface Notification {
   id: string;
-  type: 'pending_review' | 'rejected' | 'stale_draft';
-  priority: 'high' | 'medium' | 'low';
+  type: "pending_review" | "rejected" | "stale_draft";
+  priority: "high" | "medium" | "low";
   title: string;
   message: string;
   session_id: number;
@@ -39,30 +61,53 @@ interface HeaderProps {
 }
 
 const PRIORITY_STYLES = {
-  high:   { dot: '#EF4444', bg: 'rgba(239,68,68,0.08)',   border: 'rgba(239,68,68,0.2)',  icon: AlertCircle,    iconColor: '#EF4444' },
-  medium: { dot: '#F59E0B', bg: 'rgba(245,158,11,0.08)',  border: 'rgba(245,158,11,0.2)', icon: Clock,          iconColor: '#F59E0B' },
-  low:    { dot: '#6B7280', bg: 'rgba(107,114,128,0.06)', border: 'rgba(107,114,128,0.15)',icon: ClipboardCheck, iconColor: '#6B7280' },
+  high: {
+    dot: "#EF4444",
+    bg: "rgba(239,68,68,0.08)",
+    border: "rgba(239,68,68,0.2)",
+    icon: AlertCircle,
+    iconColor: "#EF4444",
+  },
+  medium: {
+    dot: "#F59E0B",
+    bg: "rgba(245,158,11,0.08)",
+    border: "rgba(245,158,11,0.2)",
+    icon: Clock,
+    iconColor: "#F59E0B",
+  },
+  low: {
+    dot: "#6B7280",
+    bg: "rgba(107,114,128,0.06)",
+    border: "rgba(107,114,128,0.15)",
+    icon: ClipboardCheck,
+    iconColor: "#6B7280",
+  },
 };
 
-export default function Header({ title, subtitle, showAutoSave, onMenuClick }: HeaderProps) {
+export default function Header({
+  title,
+  subtitle,
+  showAutoSave,
+  onMenuClick,
+}: HeaderProps) {
   const { isDarkMode, toggleTheme } = useTheme();
   const { clearAuth } = useAuthStore();
   const router = useRouter();
   const { weather, loading: weatherLoading } = useWeather();
 
-  const [isOpen, setIsOpen]   = useState(false);
-  const [data, setData]       = useState<NotificationsResponse | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [data, setData] = useState<NotificationsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [tutorialOpen, setTutorialOpen] = useState(false);
-  const panelRef              = useRef<HTMLDivElement>(null);
-  const tutorialRef           = useRef<HTMLDivElement>(null);
-  const currentPath           = usePathname();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const tutorialRef = useRef<HTMLDivElement>(null);
+  const currentPath = usePathname();
   const { startTutorial, hasTutorial } = useTutorial(currentPath);
 
   const fetchNotifications = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get<NotificationsResponse>('/notifications');
+      const res = await api.get<NotificationsResponse>("/notifications");
       setData(res.data);
     } catch {
       // silently ignore — no mostrar errores en el bell
@@ -71,10 +116,15 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
     }
   }, []);
 
+  const hasFeched = useRef(false);
   // Fetch al montar y luego cada 60 segundos
   useEffect(() => {
+    if (hasFeched.current) return;
+
+    hasFeched.current = true;
+
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 60_000);
+    const interval = setInterval(fetchNotifications, 60_00);
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 
@@ -85,49 +135,75 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   // Close tutorial dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (tutorialRef.current && !tutorialRef.current.contains(e.target as Node)) {
+      if (
+        tutorialRef.current &&
+        !tutorialRef.current.contains(e.target as Node)
+      ) {
         setTutorialOpen(false);
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const handleLogout = () => { clearAuth(); router.push('/login'); };
-  const goToSession  = (id: number) => { setIsOpen(false); router.push(`/calibration?review=${id}`); };
+  const handleLogout = () => {
+    clearAuth();
+    router.push("/login");
+  };
+  const goToSession = (id: number) => {
+    setIsOpen(false);
+    router.push(`/calibration?review=${id}`);
+  };
 
   const unread = data?.unread_count ?? 0;
 
   return (
     <header
       className="h-16 flex items-center justify-between px-4 md:px-6 panel z-20 relative shadow-sm shrink-0"
-      style={{ borderBottom: '1px solid var(--border-color)' }}
+      style={{ borderBottom: "1px solid var(--border-color)" }}
     >
       {/* Left */}
       <div className="flex-1 flex items-center gap-3">
-        <button onClick={onMenuClick} className="md:hidden p-1.5 rounded-md hover-bg transition-colors" style={{ color: 'var(--text-muted)' }}>
+        <button
+          onClick={onMenuClick}
+          className="md:hidden p-1.5 rounded-md hover-bg transition-colors"
+          style={{ color: "var(--text-muted)" }}
+        >
           <Menu size={20} />
         </button>
         <div className="flex flex-col justify-center overflow-hidden">
           <div className="flex items-center gap-2">
-            <h2 className="text-base md:text-xl font-bold tracking-tight leading-tight truncate" style={{ color: 'var(--text-main)' }}>
+            <h2
+              className="text-base md:text-xl font-bold tracking-tight leading-tight truncate"
+              style={{ color: "var(--text-main)" }}
+            >
               {title}
             </h2>
             {showAutoSave && (
-              <span id="tour-autoguardado" className="hidden sm:inline-flex items-center gap-1 text-[9px] font-medium px-2 py-0.5 rounded"
-                style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-color)' }}>
+              <span
+                id="tour-autoguardado"
+                className="hidden sm:inline-flex items-center gap-1 text-[9px] font-medium px-2 py-0.5 rounded"
+                style={{
+                  color: "var(--text-muted)",
+                  backgroundColor: "var(--bg-hover)",
+                  border: "1px solid var(--border-color)",
+                }}
+              >
                 <Save size={10} /> Autoguardado
               </span>
             )}
           </div>
-          <p className="text-[10px] md:text-[11px] font-semibold uppercase tracking-wider mt-0.5 truncate hidden sm:block" style={{ color: 'var(--text-muted)' }}>
+          <p
+            className="text-[10px] md:text-[11px] font-semibold uppercase tracking-wider mt-0.5 truncate hidden sm:block"
+            style={{ color: "var(--text-muted)" }}
+          >
             {subtitle}
           </p>
         </div>
@@ -135,15 +211,25 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
 
       {/* Center: Ciudad Guayana Weather */}
       <div className="flex-1 justify-center items-center hidden lg:flex">
-        <div className="flex items-center gap-2.5 px-3 py-1 rounded-full shadow-sm"
-          style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
-          title={weather?.description || 'Cargando clima...'}
+        <div
+          className="flex items-center gap-2.5 px-3 py-1 rounded-full shadow-sm"
+          style={{
+            border: "1px solid var(--border-color)",
+            backgroundColor: "var(--bg-app)",
+          }}
+          title={weather?.description || "Cargando clima..."}
         >
-          <span className="text-[11px] font-semibold flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+          <span
+            className="text-[11px] font-semibold flex items-center gap-1"
+            style={{ color: "var(--text-muted)" }}
+          >
             <MapPin size={12} /> Guayana
           </span>
-          <div className="w-px h-3" style={{ backgroundColor: 'var(--border-color)' }} />
-          
+          <div
+            className="w-px h-3"
+            style={{ backgroundColor: "var(--border-color)" }}
+          />
+
           {weatherLoading ? (
             <div className="flex items-center gap-1.5 px-2">
               <Loader2 size={12} className="animate-spin text-gray-400" />
@@ -152,37 +238,65 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
           ) : weather ? (
             <>
               <div className="flex items-center gap-1.5">
-                {weather.icon === 'sun' && <Sun size={14} style={{ color: '#FFB812' }} />}
-                {weather.icon === 'cloud-sun' && <CloudSun size={14} style={{ color: '#FFB812' }} />}
-                {weather.icon === 'cloud' && <Cloud size={14} className="text-gray-400" />}
-                {weather.icon === 'rain' && <CloudRain size={14} className="text-blue-400" />}
-                {weather.icon === 'storm' && <CloudLightning size={14} className="text-purple-500" />}
-                {weather.icon === 'snow' && <CloudSnow size={14} className="text-cyan-300" />}
-                {weather.icon === 'fog' && <CloudFog size={14} className="text-gray-400" />}
-                <span className="text-xs font-bold" style={{ color: 'var(--text-main)' }}>{weather.temperature}°C</span>
+                {weather.icon === "sun" && (
+                  <Sun size={14} style={{ color: "#FFB812" }} />
+                )}
+                {weather.icon === "cloud-sun" && (
+                  <CloudSun size={14} style={{ color: "#FFB812" }} />
+                )}
+                {weather.icon === "cloud" && (
+                  <Cloud size={14} className="text-gray-400" />
+                )}
+                {weather.icon === "rain" && (
+                  <CloudRain size={14} className="text-blue-400" />
+                )}
+                {weather.icon === "storm" && (
+                  <CloudLightning size={14} className="text-purple-500" />
+                )}
+                {weather.icon === "snow" && (
+                  <CloudSnow size={14} className="text-cyan-300" />
+                )}
+                {weather.icon === "fog" && (
+                  <CloudFog size={14} className="text-gray-400" />
+                )}
+                <span
+                  className="text-xs font-bold"
+                  style={{ color: "var(--text-main)" }}
+                >
+                  {weather.temperature}°C
+                </span>
               </div>
-              <div className="w-px h-3" style={{ backgroundColor: 'var(--border-color)' }} />
-              <div className="flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+              <div
+                className="w-px h-3"
+                style={{ backgroundColor: "var(--border-color)" }}
+              />
+              <div
+                className="flex items-center gap-1"
+                style={{ color: "var(--text-muted)" }}
+              >
                 <Droplets size={12} className="text-blue-400" />
-                <span className="text-[10px] font-medium">Hum: {weather.humidity}%</span>
+                <span className="text-[10px] font-medium">
+                  Hum: {weather.humidity}%
+                </span>
               </div>
             </>
           ) : (
-             <span className="text-[10px] text-gray-400">Clima no disponible</span>
+            <span className="text-[10px] text-gray-400">
+              Clima no disponible
+            </span>
           )}
         </div>
       </div>
 
       {/* Right — actions */}
       <div className="flex-1 flex items-center justify-end gap-1 md:gap-2">
-
         {/* ❓ Tutorial */}
         {hasTutorial() && (
           <div className="relative" ref={tutorialRef}>
             <button
-              onClick={() => setTutorialOpen(v => !v)}
+              onClick={() => setTutorialOpen((v) => !v)}
               className="p-1.5 rounded-md hover-bg transition-colors"
-              style={{ color: 'var(--text-muted)' }}
+              style={{ color: "var(--text-muted)" }}
               title="Tutorial interactivo"
             >
               <HelpCircle size={16} />
@@ -196,33 +310,83 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
                   exit={{ opacity: 0, y: -6, scale: 0.95 }}
                   transition={{ duration: 0.12 }}
                   className="absolute right-0 top-full mt-2 w-56 rounded-lg shadow-xl z-50 overflow-hidden"
-                  style={{ backgroundColor: 'var(--bg-panel)', border: '1px solid var(--border-color)' }}
+                  style={{
+                    backgroundColor: "var(--bg-panel)",
+                    border: "1px solid var(--border-color)",
+                  }}
                 >
-                  <div className="px-3 py-2" style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <p className="text-[11px] font-bold" style={{ color: 'var(--text-main)' }}>Tutorial Interactivo</p>
-                    <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Selecciona el nivel de detalle</p>
+                  <div
+                    className="px-3 py-2"
+                    style={{ borderBottom: "1px solid var(--border-color)" }}
+                  >
+                    <p
+                      className="text-[11px] font-bold"
+                      style={{ color: "var(--text-main)" }}
+                    >
+                      Tutorial Interactivo
+                    </p>
+                    <p
+                      className="text-[9px]"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Selecciona el nivel de detalle
+                    </p>
                   </div>
 
                   <button
-                    onClick={() => { setTutorialOpen(false); setTimeout(() => startTutorial('quick'), 150); }}
+                    onClick={() => {
+                      setTutorialOpen(false);
+                      setTimeout(() => startTutorial("quick"), 150);
+                    }}
                     className="w-full text-left px-3 py-2.5 hover-bg transition-colors flex items-start gap-2.5"
-                    style={{ borderBottom: '1px solid var(--border-color)' }}
+                    style={{ borderBottom: "1px solid var(--border-color)" }}
                   >
-                    <Zap size={14} className="shrink-0 mt-0.5" style={{ color: '#F59E0B' }} />
+                    <Zap
+                      size={14}
+                      className="shrink-0 mt-0.5"
+                      style={{ color: "#F59E0B" }}
+                    />
                     <div>
-                      <p className="text-[11px] font-semibold" style={{ color: 'var(--text-main)' }}>Tutorial Rápido</p>
-                      <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Resumen funcional de cada sección</p>
+                      <p
+                        className="text-[11px] font-semibold"
+                        style={{ color: "var(--text-main)" }}
+                      >
+                        Tutorial Rápido
+                      </p>
+                      <p
+                        className="text-[9px] mt-0.5"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        Resumen funcional de cada sección
+                      </p>
                     </div>
                   </button>
 
                   <button
-                    onClick={() => { setTutorialOpen(false); setTimeout(() => startTutorial('extended'), 150); }}
+                    onClick={() => {
+                      setTutorialOpen(false);
+                      setTimeout(() => startTutorial("extended"), 150);
+                    }}
                     className="w-full text-left px-3 py-2.5 hover-bg transition-colors flex items-start gap-2.5"
                   >
-                    <BookOpen size={14} className="shrink-0 mt-0.5" style={{ color: '#3B82F6' }} />
+                    <BookOpen
+                      size={14}
+                      className="shrink-0 mt-0.5"
+                      style={{ color: "#3B82F6" }}
+                    />
                     <div>
-                      <p className="text-[11px] font-semibold" style={{ color: 'var(--text-main)' }}>Tutorial Extendido</p>
-                      <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Explicación metrológica detallada</p>
+                      <p
+                        className="text-[11px] font-semibold"
+                        style={{ color: "var(--text-main)" }}
+                      >
+                        Tutorial Extendido
+                      </p>
+                      <p
+                        className="text-[9px] mt-0.5"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        Explicación metrológica detallada
+                      </p>
                     </div>
                   </button>
                 </motion.div>
@@ -232,8 +396,15 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
         )}
 
         {/* Tema */}
-        <button onClick={toggleTheme} className="p-1.5 rounded-md hover-bg transition-colors" style={{ color: 'var(--text-muted)' }}>
-          <motion.div whileTap={{ rotate: 180 }} transition={{ duration: 0.15 }}>
+        <button
+          onClick={toggleTheme}
+          className="p-1.5 rounded-md hover-bg transition-colors"
+          style={{ color: "var(--text-muted)" }}
+        >
+          <motion.div
+            whileTap={{ rotate: 180 }}
+            transition={{ duration: 0.15 }}
+          >
             {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
           </motion.div>
         </button>
@@ -241,9 +412,12 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
         {/* Notificaciones */}
         <div className="relative" ref={panelRef}>
           <button
-            onClick={() => { setIsOpen(v => !v); if (!isOpen) fetchNotifications(); }}
+            onClick={() => {
+              setIsOpen((v) => !v);
+              if (!isOpen) fetchNotifications();
+            }}
             className="relative p-1.5 rounded-md hover-bg transition-colors"
-            style={{ color: 'var(--text-muted)' }}
+            style={{ color: "var(--text-muted)" }}
             title="Notificaciones"
           >
             <Bell size={16} />
@@ -252,13 +426,16 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 className="absolute top-1 right-1 min-w-[14px] h-[14px] px-0.5 rounded-full flex items-center justify-center text-white font-bold"
-                style={{ fontSize: '9px', backgroundColor: '#EF4444' }}
+                style={{ fontSize: "9px", backgroundColor: "#EF4444" }}
               >
-                {unread > 9 ? '9+' : unread}
+                {unread > 9 ? "9+" : unread}
               </motion.span>
             )}
             {unread === 0 && (
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#6B7280' }} />
+              <span
+                className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: "#6B7280" }}
+              />
             )}
           </button>
 
@@ -272,21 +449,38 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
                 transition={{ duration: 0.15 }}
                 className="absolute right-0 top-full mt-2 w-80 rounded-xl shadow-2xl z-50 overflow-hidden"
                 style={{
-                  backgroundColor: 'var(--bg-panel)',
-                  border: '1px solid var(--border-color)',
+                  backgroundColor: "var(--bg-panel)",
+                  border: "1px solid var(--border-color)",
                 }}
               >
                 {/* Header del panel */}
-                <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <div
+                  className="flex items-center justify-between px-4 py-3"
+                  style={{ borderBottom: "1px solid var(--border-color)" }}
+                >
                   <div>
-                    <p className="text-sm font-bold" style={{ color: 'var(--text-main)' }}>Notificaciones</p>
+                    <p
+                      className="text-sm font-bold"
+                      style={{ color: "var(--text-main)" }}
+                    >
+                      Notificaciones
+                    </p>
                     {data && (
-                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                        {unread > 0 ? `${unread} requieren atención` : 'Todo al día'}
+                      <p
+                        className="text-[10px]"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        {unread > 0
+                          ? `${unread} requieren atención`
+                          : "Todo al día"}
                       </p>
                     )}
                   </div>
-                  <button onClick={() => setIsOpen(false)} className="p-1 rounded hover-bg" style={{ color: 'var(--text-muted)' }}>
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    className="p-1 rounded hover-bg"
+                    style={{ color: "var(--text-muted)" }}
+                  >
                     <X size={14} />
                   </button>
                 </div>
@@ -301,58 +495,109 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
 
                   {!loading && (!data || data.items.length === 0) && (
                     <div className="flex flex-col items-center justify-center py-8 gap-2">
-                      <CheckCircle2 size={28} style={{ color: '#10B981' }} />
-                      <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                      <CheckCircle2 size={28} style={{ color: "#10B981" }} />
+                      <p
+                        className="text-xs font-medium"
+                        style={{ color: "var(--text-muted)" }}
+                      >
                         Sin notificaciones pendientes
                       </p>
                     </div>
                   )}
 
-                  {!loading && data?.items.map((n) => {
-                    const style = PRIORITY_STYLES[n.priority];
-                    const Icon  = style.icon;
-                    return (
-                      <button
-                        key={n.id}
-                        onClick={() => goToSession(n.session_id)}
-                        className="w-full text-left px-4 py-3 transition-colors hover-bg flex items-start gap-3"
-                        style={{ borderBottom: '1px solid var(--border-color)' }}
-                      >
-                        <div className="shrink-0 mt-0.5 w-7 h-7 rounded-full flex items-center justify-center"
-                          style={{ backgroundColor: style.bg, border: `1px solid ${style.border}` }}>
-                          <Icon size={13} style={{ color: style.iconColor }} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-main)' }}>{n.title}</p>
-                          <p className="text-[10px] truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>{n.message}</p>
-                          {n.reason && (
-                            <p className="text-[9px] mt-0.5 italic truncate" style={{ color: '#F59E0B' }}>
-                              Motivo: {n.reason}
-                            </p>
-                          )}
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{n.age}</span>
-                            {n.technician && (
-                              <>
-                                <span className="text-[9px]" style={{ color: 'var(--border-color)' }}>·</span>
-                                <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{n.technician}</span>
-                              </>
-                            )}
+                  {!loading &&
+                    data?.items.map((n) => {
+                      const style = PRIORITY_STYLES[n.priority];
+                      const Icon = style.icon;
+                      return (
+                        <button
+                          key={n.id}
+                          onClick={() => goToSession(n.session_id)}
+                          className="w-full text-left px-4 py-3 transition-colors hover-bg flex items-start gap-3"
+                          style={{
+                            borderBottom: "1px solid var(--border-color)",
+                          }}
+                        >
+                          <div
+                            className="shrink-0 mt-0.5 w-7 h-7 rounded-full flex items-center justify-center"
+                            style={{
+                              backgroundColor: style.bg,
+                              border: `1px solid ${style.border}`,
+                            }}
+                          >
+                            <Icon
+                              size={13}
+                              style={{ color: style.iconColor }}
+                            />
                           </div>
-                        </div>
-                        <div className="shrink-0 w-1.5 h-1.5 rounded-full mt-2" style={{ backgroundColor: style.dot }} />
-                      </button>
-                    );
-                  })}
+                          <div className="flex-1 min-w-0">
+                            <p
+                              className="text-[11px] font-semibold truncate"
+                              style={{ color: "var(--text-main)" }}
+                            >
+                              {n.title}
+                            </p>
+                            <p
+                              className="text-[10px] truncate mt-0.5"
+                              style={{ color: "var(--text-muted)" }}
+                            >
+                              {n.message}
+                            </p>
+                            {n.reason && (
+                              <p
+                                className="text-[9px] mt-0.5 italic truncate"
+                                style={{ color: "#F59E0B" }}
+                              >
+                                Motivo: {n.reason}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              <span
+                                className="text-[9px]"
+                                style={{ color: "var(--text-muted)" }}
+                              >
+                                {n.age}
+                              </span>
+                              {n.technician && (
+                                <>
+                                  <span
+                                    className="text-[9px]"
+                                    style={{ color: "var(--border-color)" }}
+                                  >
+                                    ·
+                                  </span>
+                                  <span
+                                    className="text-[9px]"
+                                    style={{ color: "var(--text-muted)" }}
+                                  >
+                                    {n.technician}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div
+                            className="shrink-0 w-1.5 h-1.5 rounded-full mt-2"
+                            style={{ backgroundColor: style.dot }}
+                          />
+                        </button>
+                      );
+                    })}
                 </div>
 
                 {/* Footer */}
                 {data && data.total > 0 && (
-                  <div className="px-4 py-2.5" style={{ borderTop: '1px solid var(--border-color)' }}>
+                  <div
+                    className="px-4 py-2.5"
+                    style={{ borderTop: "1px solid var(--border-color)" }}
+                  >
                     <button
-                      onClick={() => { setIsOpen(false); router.push('/calibration'); }}
+                      onClick={() => {
+                        setIsOpen(false);
+                        router.push("/calibration");
+                      }}
                       className="w-full text-center text-[10px] font-semibold transition-colors"
-                      style={{ color: 'var(--brand-primary)' }}
+                      style={{ color: "var(--brand-primary)" }}
                     >
                       Ver todas en Revisión y Emisión →
                     </button>
@@ -364,7 +609,12 @@ export default function Header({ title, subtitle, showAutoSave, onMenuClick }: H
         </div>
 
         {/* Logout */}
-        <button onClick={handleLogout} className="p-1.5 rounded-md hover-bg transition-colors hidden sm:block" style={{ color: 'var(--text-muted)' }} title="Cerrar sesión">
+        <button
+          onClick={handleLogout}
+          className="p-1.5 rounded-md hover-bg transition-colors hidden sm:block"
+          style={{ color: "var(--text-muted)" }}
+          title="Cerrar sesión"
+        >
           <LogOut size={16} />
         </button>
       </div>

@@ -296,7 +296,7 @@ export default function NewCalibrationPage() {
         isRecoveringRef.current = false;
         toast.error(`No se pudo restaurar el borrador #${sessionId}. Verifica tu conexión.`, { duration: 5000 });
       });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // Reset form whenever the user CHANGES the selected instrument. Uses a "last seen" ref
   // instead of a one-shot "is initial mount" flag, so StrictMode's double-mount in dev
@@ -350,7 +350,7 @@ export default function NewCalibrationPage() {
 
   // ─── Derived ───
   const selectedStd = standards.find((s: Standard) => String(s.id) === selectedStandard);
-  const grids: GridSchema[] = matchedSchema?.ui_schema?.grids || [];
+  const grids: GridSchema[] = useMemo(() => matchedSchema?.ui_schema?.grids || [], [matchedSchema?.ui_schema?.grids]);
   const procedureCode = matchedSchema?.code || '';
   const isStrategyImplemented = IMPLEMENTED_STRATEGIES.includes(procedureCode);
 
@@ -445,6 +445,25 @@ export default function NewCalibrationPage() {
 
   }, [selectedInst, selectedStd]);
 
+  // ── Auto-preload metadata fields from the Procedure Schema defaults ────────
+  useEffect(() => {
+    if (!matchedSchema?.ui_schema?.metadata_requirements || isRecoveringRef.current) return;
+
+    setEnvironmentalData(prev => {
+      const next = { ...prev };
+      let changed = false;
+      matchedSchema.ui_schema.metadata_requirements.forEach(req => {
+        // If the field is empty and has a default in the schema, fill it.
+        // We convert to string as environmentalData is Record<string, string>.
+        if (!next[req.field] && req.default !== undefined && req.default !== null) {
+          next[req.field] = String(req.default);
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [matchedSchema]);
+
 
   // ─── Rebuild gridDataMap from server raw_payload once the procedure schema has loaded ───
   // Fires when schema grids become available (after instrument is selected) OR when
@@ -455,7 +474,7 @@ export default function NewCalibrationPage() {
     recoveryRawPayloadRef.current = null; // consume — only rebuild once
     const recovered = rebuildGridData(rawPayload, grids);
     if (Object.keys(recovered).length > 0) setGridDataMap(recovered);
-  }, [gridRecoveryTrigger, grids]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [gridRecoveryTrigger, grids]);
 
   // ─── Grid data handler ───
   const handleGridChange = useCallback((gridId: string, data: GridData) => {
@@ -572,7 +591,7 @@ export default function NewCalibrationPage() {
     }
 
     return payload;
-  }, [gridDataMap, grids, selectedInst, selectedStd, environmentalData, calibrationDate, nextCalibrationDate, technicianObservation, tempUncertainty]);
+  }, [gridDataMap, grids, selectedInst, environmentalData, procedureCode]);
 
   // ─── Session creation body (shared by draft + submit) ───
   const buildSessionBody = useCallback(() => ({
@@ -653,7 +672,7 @@ export default function NewCalibrationPage() {
     if (!activeSessionId || Object.keys(gridDataMap).length === 0) return;
     triggerAutoSave();
     return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
-  }, [gridDataMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [gridDataMap, activeSessionId, triggerAutoSave]);
 
   // ─── Validate required fields ───
   const validateFields = useCallback((): boolean => {
@@ -717,7 +736,7 @@ export default function NewCalibrationPage() {
     }
 
     return true;
-  }, [selectedInstrument, selectedStandard, environmentalData, matchedSchema, grids, gridDataMap, nextCalibrationDate, calibrationDate]);
+  }, [selectedInstrument, selectedStandard, environmentalData, matchedSchema, grids, gridDataMap, nextCalibrationDate, procedureCode, selectedStandard2, minNextCalibrationDate]);
 
   // ─── Save as draft ───
   const handleSaveDraft = async () => {
@@ -774,16 +793,30 @@ export default function NewCalibrationPage() {
 
       const submitRes = await api.post(`/calibration/sessions/${sessionId}/submit`, { raw_payload: payload });
 
+      // Cancel any pending auto-save timer BEFORE clearing the session ID.
+      // Otherwise the 2-second debounce fires after sessionId is null,
+      // producing a spurious "Submit error: undefined" in the console.
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+
       setBudgetResult(submitRes.data.budget_preview);
       localStorage.removeItem(DRAFT_KEY);
       setActiveSessionId(null);
       toast.success(`Sesión #${sessionId} procesada y enviada a revisión`);
     } catch (err: unknown) {
-      const msg = isAxiosError(err)
-        ? (err.response?.data?.message || err.response?.data?.error || 'Error procesando calibración')
-        : 'Error procesando calibración';
+      // error.userMessage es normalizado por el interceptor en api.ts.
+      // Cubre: JSON con message/error/errors, texto plano, HTML, red caída, timeouts.
+      const msg = (err as { userMessage?: string }).userMessage ?? 'Error procesando calibración';
       toast.error(msg);
-      if (isAxiosError(err)) console.error('Submit error:', err.response?.data);
+      if (isAxiosError(err)) {
+        console.error('Submit error:', {
+          status: err.response?.status,
+          message: msg,
+          url: err.config?.url,
+        });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -1023,7 +1056,7 @@ export default function NewCalibrationPage() {
                     <AlertTriangle size={13} className="shrink-0 mt-0.5" />
                     <span>
                       No hay patrones de referencia registrados para la categoría{' '}
-                      <strong className="font-semibold">"{selectedInst.category}"</strong>.{' '}
+                      <strong className="font-semibold">{selectedInst.category}</strong>.{' '}
                       Sin un patrón válido no es posible calibrar este equipo.{' '}
                       <Link href={`/standards?new=${selectedInst.category}`} className="underline font-semibold hover:opacity-80 transition-opacity">
                         Registrar patrón →
