@@ -35,7 +35,9 @@ function decodeUnicodeEscapes(value: unknown): unknown {
   return value;
 }
 
-// Interceptor: si recibe 401, limpia el store (el layout protegido redirige a /login)
+// Interceptor: si recibe 401, limpia el store (el layout protegido redirige a /login).
+// Si la respuesta es un error, adjunta un campo normalizado `error.userMessage`
+// con el mejor mensaje disponible, incluso si el body es HTML o está vacío.
 api.interceptors.response.use(
   (response) => {
     if (response.config.responseType !== 'blob') {
@@ -47,6 +49,38 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       useAuthStore.getState().clearAuth();
     }
+
+    // Extraer el mejor mensaje disponible del error de la API.
+    // Esto evita que cada componente tenga que hacer su propia lógica de extracción,
+    // y que `err.response?.data` sea `undefined` o un HTML de 50kb.
+    const data = error.response?.data;
+    let userMessage = 'Error de conexión con el servidor.';
+
+    if (typeof data === 'string' && !data.startsWith('<')) {
+      // Texto plano (no HTML)
+      userMessage = data;
+    } else if (data && typeof data === 'object') {
+      // JSON estándar de Laravel: { message: "..." } o { error: "..." } o { errors: {...} }
+      if (data.message) {
+        userMessage = data.message;
+      } else if (data.error) {
+        userMessage = data.error;
+      } else if (data.errors) {
+        // Errores de validación: tomar el primer mensaje de cada campo
+        const firstErrors = Object.values(data.errors as Record<string, string[]>)
+          .flat()
+          .slice(0, 2)
+          .join(' | ');
+        userMessage = firstErrors || 'Error de validación.';
+      }
+    } else if (!error.response) {
+      // Sin respuesta: timeout, red caída, CORS preflight rechazado
+      userMessage = 'No se pudo conectar con el servidor. Verifique su conexión.';
+    } else {
+      userMessage = `Error ${error.response.status}: ${error.response.statusText || 'Sin detalles'}`;
+    }
+
+    error.userMessage = userMessage;
     return Promise.reject(error);
   }
 );
