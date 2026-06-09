@@ -244,8 +244,8 @@ export default function DashboardPage() {
                       dataKey="value"
                       stroke="none"
                     >
-                      {conformityData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      {conformityData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.fill} />
                       ))}
                     </Pie>
                     <Tooltip

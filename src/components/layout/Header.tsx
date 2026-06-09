@@ -29,11 +29,12 @@ import {
   CloudFog,
   Loader2,
 } from "lucide-react";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import api from "@/lib/api";
 import { useWeather } from "@/lib/useWeather";
 import { usePathname } from "next/navigation";
 import { useTutorial } from "@/lib/tutorials/useTutorial";
+import { useQuery } from "@tanstack/react-query";
 
 interface Notification {
   id: string;
@@ -91,42 +92,30 @@ export default function Header({
   onMenuClick,
 }: HeaderProps) {
   const { isDarkMode, toggleTheme } = useTheme();
-  const { clearAuth } = useAuthStore();
+  const clearAuth = useAuthStore((s) => s.clearAuth);
   const router = useRouter();
   const { weather, loading: weatherLoading } = useWeather();
 
   const [isOpen, setIsOpen] = useState(false);
-  const [data, setData] = useState<NotificationsResponse | null>(null);
-  const [loading, setLoading] = useState(false);
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const tutorialRef = useRef<HTMLDivElement>(null);
   const currentPath = usePathname();
   const { startTutorial, hasTutorial } = useTutorial(currentPath);
 
-  const fetchNotifications = useCallback(async () => {
-    try {
-      setLoading(true);
+  const {
+    data,
+    isLoading: loading,
+    refetch,
+  } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: async (): Promise<NotificationsResponse> => {
       const res = await api.get<NotificationsResponse>("/notifications");
-      setData(res.data);
-    } catch {
-      // silently ignore — no mostrar errores en el bell
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const hasFeched = useRef(false);
-  // Fetch al montar y luego cada 60 segundos
-  useEffect(() => {
-    if (hasFeched.current) return;
-
-    hasFeched.current = true;
-
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 60_00);
-    return () => clearInterval(interval);
-  }, [fetchNotifications]);
+      return res.data;
+    },
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+  });
 
   // Cerrar al hacer clic fuera
   useEffect(() => {
@@ -414,7 +403,7 @@ export default function Header({
           <button
             onClick={() => {
               setIsOpen((v) => !v);
-              if (!isOpen) fetchNotifications();
+              if (!isOpen) refetch();
             }}
             className="relative p-1.5 rounded-md hover-bg transition-colors"
             style={{ color: "var(--text-muted)" }}
