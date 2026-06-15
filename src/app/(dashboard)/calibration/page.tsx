@@ -32,6 +32,12 @@ function isDraftResumable(createdAt: string): boolean {
   return Date.now() - new Date(createdAt).getTime() < TWELVE_HOURS_MS;
 }
 
+function parseLocalDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const [y, m, d] = value.split("-");
+  return new Date(+y, +m - 1, +d);
+}
+
 export default function CalibrationPage() {
   const [activeTab, setActiveTab] = useState<
     "pending" | "drafts" | "rejected" | "issued"
@@ -556,33 +562,39 @@ export default function CalibrationPage() {
                       style={{ color: "var(--text-muted)" }}
                     >
                       {cert.calibration_date
-                        ? new Date(cert.calibration_date).toLocaleDateString(
-                            "es",
-                            { day: "2-digit", month: "short", year: "numeric" },
-                          )
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-2.5 hidden sm:table-cell text-[11px]">
-                      {cert.next_calibration_date ? (
-                        <span
-                          style={{
-                            color:
-                              new Date(cert.next_calibration_date) < new Date()
-                                ? COLORS.danger
-                                : COLORS.success,
-                          }}
-                        >
-                          {new Date(
-                            cert.next_calibration_date,
-                          ).toLocaleDateString("es", {
+                        ? parseLocalDate(
+                            cert.calibration_date,
+                          )!.toLocaleDateString("es", {
                             day: "2-digit",
                             month: "short",
                             year: "numeric",
-                          })}
-                        </span>
-                      ) : (
-                        <span style={{ color: "var(--text-muted)" }}>—</span>
-                      )}
+                          })
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-2.5 hidden sm:table-cell text-[11px]">
+                      {(() => {
+                        const nextDate = parseLocalDate(
+                          cert.next_calibration_date,
+                        );
+                        return nextDate ? (
+                          <span
+                            style={{
+                              color:
+                                nextDate < new Date()
+                                  ? COLORS.danger
+                                  : COLORS.success,
+                            }}
+                          >
+                            {nextDate.toLocaleDateString("es", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </span>
+                        ) : (
+                          <span style={{ color: "var(--text-muted)" }}>—</span>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-2.5">
                       {cert.conforms === true && (
