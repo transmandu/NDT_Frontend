@@ -84,7 +84,7 @@ export default function CalibrationReview({
   const handleApprove = async () => {
     setActionLoading(true);
     try {
-      const res = await api.post(`/calibration/sessions/${id}/approve`);
+      const res = await api.post(`/calibration/sessions/${id}/approvals`);
       const { certificate_id, pdf_ready } = res.data;
       queryClient.invalidateQueries({ queryKey: ["calibrationSessions"] });
       queryClient.invalidateQueries({ queryKey: ["calibrationSession", id] });
@@ -131,7 +131,7 @@ export default function CalibrationReview({
   const handleReject = async (reason: string) => {
     setActionLoading(true);
     try {
-      await api.post(`/calibration/sessions/${id}/reject`, { reason });
+      await api.post(`/calibration/sessions/${id}/rejections`, { reason });
       queryClient.invalidateQueries({ queryKey: ["calibrationSessions"] });
       queryClient.invalidateQueries({ queryKey: ["calibrationSession", id] });
       toast.success("Sesion rechazada - el tecnico fue notificado");

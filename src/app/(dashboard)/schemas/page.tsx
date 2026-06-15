@@ -390,7 +390,8 @@ export default function SchemasPage() {
 
   /* ─── Deactivate mutation ── */
   const deactivateMut = useMutation({
-    mutationFn: (id: number) => api.delete(`/calibration/schemas/${id}`),
+    mutationFn: (id: number) =>
+      api.patch(`/calibration/schemas/${id}/deactivation`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["schemas"] });
       toast.success("Esquema desactivado correctamente.");
