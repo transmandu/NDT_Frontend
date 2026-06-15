@@ -984,13 +984,7 @@ function InstrumentModal({
                       <div className="relative">
                         <input
                           {...register("internal_code")}
-                          readOnly={!isEdit}
-                          className={`field-input font-mono ${!isEdit ? "opacity-70 cursor-default" : ""}`}
-                          style={
-                            !isEdit
-                              ? { backgroundColor: "var(--bg-hover)" }
-                              : undefined
-                          }
+                          className="field-input font-mono"
                         />
                         {!isEdit && (
                           <span
@@ -1000,7 +994,7 @@ function InstrumentModal({
                               color: "#10B981",
                             }}
                           >
-                            AUTO
+                            SUGERIDO
                           </span>
                         )}
                       </div>
