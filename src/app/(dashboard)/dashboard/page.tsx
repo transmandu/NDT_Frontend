@@ -155,7 +155,7 @@ export default function DashboardPage() {
               className="text-xs font-semibold"
               style={{ color: "var(--text-main)" }}
             >
-              Actividad de la Semana
+              Calibraciones de la Semana
             </h3>
           </div>
 

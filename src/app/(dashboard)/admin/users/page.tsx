@@ -147,13 +147,13 @@ export default function UsersPage() {
 
   const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ['users'],
-    queryFn: () => api.get('/admin/users').then(r => r.data.data || []),
+    queryFn: () => api.get('/users').then(r => r.data.data || []),
   });
 
   const saveMut = useMutation({
     mutationFn: (payload: UserPayload) =>
       editUser
-        ? api.put(`/admin/users/${editUser.id}`, payload)
+        ? api.put(`/users/${editUser.id}`, payload)
         : api.post('/auth/register', payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] });
@@ -170,7 +170,7 @@ export default function UsersPage() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: number) => api.delete(`/admin/users/${id}`),
+    mutationFn: (id: number) => api.delete(`/users/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] });
       toast.success('Usuario eliminado correctamente');

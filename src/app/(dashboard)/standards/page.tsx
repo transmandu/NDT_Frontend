@@ -776,13 +776,7 @@ function StandardModal({
                       <div className="relative">
                         <input
                           {...register("internal_code")}
-                          readOnly={!isEdit}
-                          className={`field-input font-mono ${!isEdit ? "cursor-default opacity-70" : ""}`}
-                          style={
-                            !isEdit
-                              ? { backgroundColor: "var(--bg-hover)" }
-                              : undefined
-                          }
+                          className="field-input font-mono"
                         />
                         {!isEdit && (
                           <span
@@ -792,7 +786,7 @@ function StandardModal({
                               color: "#10B981",
                             }}
                           >
-                            AUTO
+                            SUGERIDO
                           </span>
                         )}
                       </div>
