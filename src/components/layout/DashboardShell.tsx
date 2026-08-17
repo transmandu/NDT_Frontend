@@ -38,6 +38,10 @@ const viewInfo: Record<
     title: "Auditoria",
     subtitle: "Registro de trazabilidad ISO 17025",
   },
+  "/library": {
+    title: "Biblioteca Digital",
+    subtitle: "Procedimientos, manuales y normas del laboratorio",
+  },
 };
 
 export default function DashboardShell({

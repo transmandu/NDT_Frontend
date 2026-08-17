@@ -102,11 +102,11 @@ export const DataTable = React.memo(function DataTable<TData, TValue>({
         <div className="flex items-center gap-2">
           {/* Global filter */}
           <div
-            className="flex items-center rounded px-2 py-1 w-full sm:w-64 input-theme shadow-sm"
+            className="flex items-center rounded px-2 py-2 w-full sm:w-80 input-theme shadow-sm"
             style={{ border: "1.5px solid var(--border-color)" }}
           >
             <Search
-              size={12}
+              size={16}
               className="mr-1.5 shrink-0"
               style={{ color: "var(--text-muted)" }}
             />
@@ -116,7 +116,7 @@ export const DataTable = React.memo(function DataTable<TData, TValue>({
               placeholder={searchPlaceholder}
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.target.value)}
-              className="bg-transparent border-none outline-none text-[11px] w-full"
+              className="bg-transparent border-none outline-none text-sm w-full"
               style={{ color: "var(--text-main)" }}
             />
             {globalFilter && (
@@ -125,7 +125,7 @@ export const DataTable = React.memo(function DataTable<TData, TValue>({
                 className="ml-1 opacity-60 hover:opacity-100"
                 style={{ color: "var(--text-muted)" }}
               >
-                <X size={10} />
+                <X size={16} />
               </button>
             )}
           </div>
@@ -173,7 +173,7 @@ export const DataTable = React.memo(function DataTable<TData, TValue>({
             </button>
             {showColMenu && (
               <div
-                className="absolute right-0 top-full mt-1 min-w-[160px] rounded-md shadow-xl z-70 py-1"
+                className="absolute right-0 top-full mt-1 min-w-40 rounded-md shadow-xl z-70 py-1"
                 style={{
                   backgroundColor: "var(--bg-panel)",
                   border: "1px solid var(--border-color)",
@@ -231,7 +231,7 @@ export const DataTable = React.memo(function DataTable<TData, TValue>({
                           | undefined
                       )?.tourId
                     }
-                    className="px-4 py-2.5 th-theme text-[11px] whitespace-nowrap select-none"
+                    className="px-4 py-2.5 th-theme text-sm whitespace-nowrap select-none"
                     style={{ width: header.column.columnDef.size ?? undefined }}
                   >
                     {header.isPlaceholder ? null : (
@@ -311,7 +311,7 @@ export const DataTable = React.memo(function DataTable<TData, TValue>({
 
       {/* ── Pagination ── */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-0.5">
-        <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
           Mostrando {totalFiltered === 0 ? 0 : pageIndex * pageSize + 1}–
           {Math.min((pageIndex + 1) * pageSize, totalFiltered)} de{" "}
           <strong>{totalFiltered}</strong> registros
@@ -320,7 +320,7 @@ export const DataTable = React.memo(function DataTable<TData, TValue>({
           <select
             value={table.getState().pagination.pageSize}
             onChange={(e) => table.setPageSize(Number(e.target.value))}
-            className="input-theme rounded px-1.5 py-0.5 text-[10px] h-6 cursor-pointer"
+            className="input-theme rounded px-1.5 py-0.5 text-xs h-6 cursor-pointer"
             style={{ border: "1px solid var(--border-color)" }}
           >
             {pageSizeOptions.map((n) => (
@@ -412,7 +412,7 @@ function FilterPopover<TData, TValue>({
 
       {open && (
         <div
-          className="absolute left-0 top-full mt-1.5 min-w-[160px] rounded-md shadow-xl z-80 py-1 overflow-hidden"
+          className="absolute left-0 top-full mt-1.5 min-w-40 rounded-md shadow-xl z-80 py-1 overflow-hidden"
           style={{
             backgroundColor: "var(--bg-panel)",
             border: "1px solid var(--border-color)",
@@ -510,7 +510,7 @@ function PagBtn({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="h-6 min-w-[24px] px-1.5 rounded text-[10px] flex items-center justify-center transition-colors disabled:opacity-30"
+      className="h-6 min-w-6 px-1.5 rounded text-[10px] flex items-center justify-center transition-colors disabled:opacity-30"
       style={{
         backgroundColor: active ? "var(--brand-primary)" : "transparent",
         color: active ? "#fff" : "var(--text-muted)",

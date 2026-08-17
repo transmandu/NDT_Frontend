@@ -121,28 +121,28 @@ export default function DashboardPage() {
         id="tour-dashboard-kpis"
         className="flex flex-wrap items-center gap-3"
       >
-        <CompactMetric label="Total Calibraciones" value={sessions.length} />
-        <div className="h-4 w-px bg-gray-300 dark:bg-gray-700 mx-2 hidden sm:block" />
+        <CompactMetric label="Total Calibraciones" value={sessions.length}/>
+        <div className="h-4 w-px bg-gray-300 dark:bg-gray-700 mx-2 hidden sm:block text-md"/>
         <CompactMetric
           label="Pendientes"
           value={stats.pending}
-          icon={<Clock size={12} className="text-orange-500" />}
+          icon={<Clock size={18} className="text-orange-500" />}
         />
         <CompactMetric
           label="Aprobados este mes"
           value={stats.approved}
-          icon={<CheckCircle2 size={12} className="text-emerald-500" />}
+          icon={<CheckCircle2 size={18} className="text-emerald-500" />}
         />
         <CompactMetric
           label="Patrones por vencer"
           value={stdWarning + stdExpired}
-          icon={<AlertTriangle size={12} className="text-red-500" />}
+          icon={<AlertTriangle size={18} className="text-red-500" />}
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Chart 2: Recent Activity (Bar Chart) */}
-        <div className="lg:col-span-1 panel rounded-md shadow-sm overflow-hidden flex flex-col h-[280px]">
+        <div className="lg:col-span-1 panel rounded-md shadow-sm overflow-hidden flex flex-col h-70">
           <div
             className="px-4 py-3 flex items-center gap-2"
             style={{
@@ -152,7 +152,7 @@ export default function DashboardPage() {
           >
             <Activity size={14} style={{ color: "var(--text-muted)" }} />
             <h3
-              className="text-xs font-semibold"
+              className="text-md font-semibold"
               style={{ color: "var(--text-main)" }}
             >
               Calibraciones de la Semana
@@ -175,12 +175,12 @@ export default function DashboardPage() {
                 />
                 <XAxis
                   dataKey="name"
-                  tick={{ fontSize: 9, fill: "var(--text-muted)" }}
+                  tick={{ fontSize: 12, fill: "var(--text-muted)" }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fontSize: 9, fill: "var(--text-muted)" }}
+                  tick={{ fontSize: 12, fill: "var(--text-muted)" }}
                   axisLine={false}
                   tickLine={false}
                   allowDecimals={false}
@@ -208,7 +208,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Chart 3: Conformidad */}
-        <div className="lg:col-span-1 panel rounded-md shadow-sm overflow-hidden flex flex-col h-[280px]">
+        <div className="lg:col-span-1 panel rounded-md shadow-sm overflow-hidden flex flex-col h-70">
           <div
             className="px-4 py-3 flex items-center gap-2"
             style={{
@@ -218,7 +218,7 @@ export default function DashboardPage() {
           >
             <Zap size={14} style={{ color: "var(--text-muted)" }} />
             <h3
-              className="text-xs font-semibold"
+              className="text-md font-semibold"
               style={{ color: "var(--text-main)" }}
             >
               Tasa de Conformidad
@@ -227,7 +227,7 @@ export default function DashboardPage() {
 
           <div className="flex-1 p-4 flex flex-col justify-center">
             {totalConcluded === 0 ? (
-              <div className="text-center text-[11px] text-gray-500">
+              <div className="text-center text-xs text-gray-500">
                 Sin equipos concluidos
               </div>
             ) : (
@@ -252,7 +252,7 @@ export default function DashboardPage() {
                       contentStyle={{
                         backgroundColor: "var(--bg-panel)",
                         borderColor: "var(--border-color)",
-                        fontSize: "11px",
+                        fontSize: "12px",
                         borderRadius: "6px",
                         padding: "4px 8px",
                       }}
@@ -262,7 +262,7 @@ export default function DashboardPage() {
                       verticalAlign="bottom"
                       height={24}
                       iconType="circle"
-                      wrapperStyle={{ fontSize: "10px", paddingTop: "0px" }}
+                      wrapperStyle={{ fontSize: "12px", paddingTop: "0px" }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -278,7 +278,7 @@ export default function DashboardPage() {
                     {conformityRatio}%
                   </p>
                   <p
-                    className="text-[8px] uppercase tracking-wider mt-1"
+                    className="text-xs uppercase tracking-wider mt-1"
                     style={{ color: "var(--text-muted)" }}
                   >
                     Satisfacción
@@ -302,13 +302,13 @@ export default function DashboardPage() {
           >
             <div>
               <h3
-                className="text-xs font-semibold"
+                className="text-md font-semibold"
                 style={{ color: "var(--text-main)" }}
               >
                 Seguimiento Administrativo
               </h3>
               <p
-                className="text-[10px] hidden sm:block"
+                className="text-xs hidden sm:block"
                 style={{ color: "var(--text-muted)" }}
               >
                 Flujo de trabajo de las últimas sesiones registradas en el
@@ -317,7 +317,7 @@ export default function DashboardPage() {
             </div>
             <Link
               href="/calibration"
-              className="text-[10px] font-medium hover:underline shrink-0"
+              className="text-sm font-medium hover:underline shrink-0"
               style={{ color: COLORS.primary }}
             >
               Abrir Registro Visual →
@@ -325,22 +325,22 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex-1 overflow-x-auto overflow-y-auto">
-            <table className="w-full text-left text-xs min-w-150">
+            <table className="w-full text-left text-md min-w-150">
               <thead className="sticky top-0 z-10 bg-(--bg-panel) shadow-sm">
                 <tr>
-                  <th className="px-4 py-2 th-theme text-[10px] uppercase tracking-wider whitespace-nowrap">
+                  <th className="px-4 py-2 th-theme text-xs uppercase tracking-wider whitespace-nowrap">
                     Expediente
                   </th>
-                  <th className="px-4 py-2 th-theme text-[10px] uppercase tracking-wider whitespace-nowrap">
+                  <th className="px-4 py-2 th-theme text-xs uppercase tracking-wider whitespace-nowrap">
                     Equipo
                   </th>
-                  <th className="px-4 py-2 th-theme text-[10px] uppercase tracking-wider whitespace-nowrap">
+                  <th className="px-4 py-2 th-theme text-xs uppercase tracking-wider whitespace-nowrap">
                     Ingreso
                   </th>
-                  <th className="px-4 py-2 th-theme text-[10px] uppercase tracking-wider whitespace-nowrap">
+                  <th className="px-4 py-2 th-theme text-xs uppercase tracking-wider whitespace-nowrap">
                     Estado del Trámite
                   </th>
-                  <th className="px-4 py-2 th-theme text-[10px] uppercase tracking-wider text-right">
+                  <th className="px-4 py-2 th-theme text-xs uppercase tracking-wider text-right">
                     Opciones
                   </th>
                 </tr>
