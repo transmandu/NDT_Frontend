@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import api from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
 import { useWeather } from "@/lib/useWeather";
 import { usePathname } from "next/navigation";
 import { useTutorial } from "@/lib/tutorials/useTutorial";
@@ -144,6 +145,9 @@ export default function Header({
 
   const handleLogout = () => {
     clearAuth();
+    // Evita que la caché de React Query (documentos, sesiones, etc. de la
+    // sesión que se cierra) siga sirviéndose al usuario que loguee después.
+    queryClient.clear();
     router.push("/login");
   };
   const goToSession = (id: number) => {
