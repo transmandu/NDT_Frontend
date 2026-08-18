@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { useAuthStore } from '@/stores/authStore';
+import { queryClient } from '@/lib/queryClient';
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api',
@@ -48,6 +49,10 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       useAuthStore.getState().clearAuth();
+      // Sin esto, los datos cacheados de la sesión anterior (ej. documentos de
+      // la Biblioteca visibles solo para el rol previo) seguían mostrándose
+      // tras volver a loguearse con otro usuario, sin recargar la página.
+      queryClient.clear();
     }
 
     // Extraer el mejor mensaje disponible del error de la API.

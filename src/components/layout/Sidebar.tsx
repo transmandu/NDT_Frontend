@@ -18,6 +18,7 @@ import {
   Users,
   FileCode2,
   ScrollText,
+  BookOpen,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -111,6 +112,11 @@ export default function Sidebar({
             href="/dashboard"
             icon={<Home size={16} />}
             label="Dashboard"
+          />
+          <NavItem
+            href="/library"
+            icon={<BookOpen size={16} />}
+            label="Biblioteca Digital"
           />
 
           <div className="pt-3 pb-1">

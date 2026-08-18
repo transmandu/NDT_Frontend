@@ -156,10 +156,9 @@
 
 /* ════════════════════════════════════════════════════════════
    Driver.js — Popover overrides
-   Import the base CSS here, OUTSIDE @layer, so it loads first,
-   then we immediately override it below.
+   Base CSS is imported in layout.tsx to avoid resolution errors.
+   We override it below.
    ════════════════════════════════════════════════════════════ */
-@import "driver.js/dist/driver.css";
 
 /* Popover container */
 .driver-popover {
