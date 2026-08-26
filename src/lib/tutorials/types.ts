@@ -32,4 +32,6 @@ export type TutorialPageKey =
   | 'standards'
   | 'calibrationNew'
   | 'calibrationCenter'
-  | 'auditLog';
+  | 'auditLog'
+  | 'qualityNc'
+  | 'qualityAc';
