@@ -24,7 +24,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className={`theme-light ${inter.className}`}>
+      <body className={`theme-light ${inter.className}`} suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>
     </html>

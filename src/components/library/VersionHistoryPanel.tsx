@@ -78,7 +78,7 @@ export function VersionHistoryPanel({
               <p className="text-[12px]" style={{ color: "var(--text-muted)" }}>{doc.title}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rou ded hover-bg" style={{ color: "var(--text-muted)" }}><X size={16} /></button>
+          <button onClick={onClose} title="Cerrar" className="p-1.5 rounded hover-bg" style={{ color: "var(--text-muted)" }}><X size={16} /></button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
