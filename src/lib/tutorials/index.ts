@@ -4,6 +4,7 @@ import { standardsSteps } from './steps/standards';
 import { calibrationNewSteps } from './steps/calibrationNew';
 import { calibrationCenterSteps } from './steps/calibrationCenter';
 import { auditLogSteps } from './steps/auditLog';
+import { qualityNcSteps, qualityAcSteps } from './steps/quality';
 import type { TutorialStep, TutorialPageKey } from './types';
 
 /** Map route paths to their tutorial steps */
@@ -14,6 +15,8 @@ const stepsByPage: Record<TutorialPageKey, TutorialStep[]> = {
   calibrationNew: calibrationNewSteps,
   calibrationCenter: calibrationCenterSteps,
   auditLog: auditLogSteps,
+  qualityNc: qualityNcSteps,
+  qualityAc: qualityAcSteps,
 };
 
 /** Resolve the current pathname to a tutorial page key */
@@ -23,6 +26,8 @@ export function resolvePageKey(pathname: string): TutorialPageKey | null {
   if (pathname.startsWith('/instruments'))     return 'instruments';
   if (pathname.startsWith('/standards'))       return 'standards';
   if (pathname.startsWith('/audit-log'))       return 'auditLog';
+  if (pathname.startsWith('/quality/nc'))      return 'qualityNc';
+  if (pathname.startsWith('/quality/ac'))      return 'qualityAc';
   if (pathname.startsWith('/dashboard'))       return 'dashboard';
   return null;
 }

@@ -28,6 +28,9 @@ import {
   CloudSnow,
   CloudFog,
   Loader2,
+  FileWarning,
+  ShieldAlert,
+  CheckCheck,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import api from "@/lib/api";
@@ -37,17 +40,49 @@ import { usePathname } from "next/navigation";
 import { useTutorial } from "@/lib/tutorials/useTutorial";
 import { useQuery } from "@tanstack/react-query";
 
+type QualityNotificationType =
+  | "nc_issued_certificate_impact"
+  | "ac_due_verification"
+  | "ac_not_effective"
+  | "ac_verified"
+  | "nc_assigned"
+  | "nc_closed"
+  | "nc_cancelled";
+
 interface Notification {
   id: string;
-  type: "pending_review" | "rejected" | "stale_draft";
+  type: "pending_review" | "rejected" | "stale_draft" | QualityNotificationType;
   priority: "high" | "medium" | "low";
   title: string;
   message: string;
-  session_id: number;
+  session_id?: number;
+  nc_id?: number;
+  ac_id?: number;
   age: string;
   technician?: string;
   reason?: string;
 }
+
+const QUALITY_TYPES = new Set<string>([
+  "nc_issued_certificate_impact",
+  "ac_due_verification",
+  "ac_not_effective",
+  "ac_verified",
+  "nc_assigned",
+  "nc_closed",
+  "nc_cancelled",
+]);
+
+/** Icono específico por tipo de notificación de Calidad — el resto usa el ícono genérico por prioridad. */
+const QUALITY_ICONS: Record<QualityNotificationType, typeof AlertCircle> = {
+  nc_issued_certificate_impact: ShieldAlert,
+  ac_due_verification: Clock,
+  ac_not_effective: FileWarning,
+  ac_verified: CheckCheck,
+  nc_assigned: FileWarning,
+  nc_closed: CheckCircle2,
+  nc_cancelled: AlertCircle,
+};
 
 interface NotificationsResponse {
   unread_count: number;
@@ -99,6 +134,7 @@ export default function Header({
 
   const [isOpen, setIsOpen] = useState(false);
   const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [ringKey, setRingKey] = useState(0);
   const panelRef = useRef<HTMLDivElement>(null);
   const tutorialRef = useRef<HTMLDivElement>(null);
   const currentPath = usePathname();
@@ -150,12 +186,27 @@ export default function Header({
     queryClient.clear();
     router.push("/login");
   };
-  const goToSession = (id: number) => {
+  const goToNotification = (n: Notification) => {
     setIsOpen(false);
-    router.push(`/calibration?review=${id}`);
+    // ac_verified/ac_not_effective traen ambos ids (para poder linkear a la NC
+    // padre desde la lista) — pero si hay ac_id, la notificación es sobre esa
+    // AC puntual, así que debe ganar sobre nc_id.
+    if (n.ac_id) router.push(`/quality/ac/${n.ac_id}`);
+    else if (n.nc_id) router.push(`/quality/nc/${n.nc_id}`);
+    else if (n.session_id) router.push(`/calibration?review=${n.session_id}`);
   };
 
   const unread = data?.unread_count ?? 0;
+
+  // Ring animation cuando cambia el conteo de no leídas — ajuste de estado
+  // durante el render (no en un efecto) para evitar el render en cascada que
+  // marca react-hooks/set-state-in-effect; mismo patrón que rcaOverride en
+  // quality/ac/[id]/page.tsx.
+  const [prevUnread, setPrevUnread] = useState(unread);
+  if (prevUnread !== unread) {
+    setPrevUnread(unread);
+    if (unread > 0) setRingKey((k) => k + 1);
+  }
 
   return (
     <header
@@ -213,10 +264,10 @@ export default function Header({
           title={weather?.description || "Cargando clima..."}
         >
           <span
-            className="text-[11px] font-semibold flex items-center gap-1"
+            className="text-sm font-semibold flex items-center gap-1"
             style={{ color: "var(--text-muted)" }}
           >
-            <MapPin size={12} /> Guayana
+            <MapPin size={16} /> Guayana
           </span>
           <div
             className="w-px h-3"
@@ -232,28 +283,28 @@ export default function Header({
             <>
               <div className="flex items-center gap-1.5">
                 {weather.icon === "sun" && (
-                  <Sun size={14} style={{ color: "#FFB812" }} />
+                  <Sun size={18} style={{ color: "#FFB812" }} />
                 )}
                 {weather.icon === "cloud-sun" && (
-                  <CloudSun size={14} style={{ color: "#FFB812" }} />
+                  <CloudSun size={18} style={{ color: "#FFB812" }} />
                 )}
                 {weather.icon === "cloud" && (
-                  <Cloud size={14} className="text-gray-400" />
+                  <Cloud size={18} className="text-gray-400" />
                 )}
                 {weather.icon === "rain" && (
-                  <CloudRain size={14} className="text-blue-400" />
+                  <CloudRain size={18} className="text-blue-400" />
                 )}
                 {weather.icon === "storm" && (
-                  <CloudLightning size={14} className="text-purple-500" />
+                  <CloudLightning size={18} className="text-purple-500" />
                 )}
                 {weather.icon === "snow" && (
-                  <CloudSnow size={14} className="text-cyan-300" />
+                  <CloudSnow size={18} className="text-cyan-300" />
                 )}
                 {weather.icon === "fog" && (
-                  <CloudFog size={14} className="text-gray-400" />
+                  <CloudFog size={18} className="text-gray-400" />
                 )}
                 <span
-                  className="text-xs font-bold"
+                  className="text-sm font-bold"
                   style={{ color: "var(--text-main)" }}
                 >
                   {weather.temperature}°C
@@ -267,8 +318,8 @@ export default function Header({
                 className="flex items-center gap-1"
                 style={{ color: "var(--text-muted)" }}
               >
-                <Droplets size={12} className="text-blue-400" />
-                <span className="text-[10px] font-medium">
+                <Droplets size={16} className="text-blue-400" />
+                <span className="text-sm font-medium">
                   Hum: {weather.humidity}%
                 </span>
               </div>
@@ -288,11 +339,11 @@ export default function Header({
           <div className="relative" ref={tutorialRef}>
             <button
               onClick={() => setTutorialOpen((v) => !v)}
-              className="p-1.5 rounded-md hover-bg transition-colors"
+              className="p-1.5 rounded-md hover-bg transition-colors cursor-pointer"
               style={{ color: "var(--text-muted)" }}
               title="Tutorial interactivo"
             >
-              <HelpCircle size={16} />
+              <HelpCircle size={20} />
             </button>
 
             <AnimatePresence>
@@ -391,14 +442,15 @@ export default function Header({
         {/* Tema */}
         <button
           onClick={toggleTheme}
-          className="p-1.5 rounded-md hover-bg transition-colors"
+          className="p-1.5 rounded-md hover-bg transition-colors cursor-pointer"
+          title={isDarkMode ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
           style={{ color: "var(--text-muted)" }}
         >
           <motion.div
             whileTap={{ rotate: 180 }}
             transition={{ duration: 0.15 }}
           >
-            {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+            {isDarkMode ? <Sun size={20} /> : <Moon size={16} />}
           </motion.div>
         </button>
 
@@ -409,16 +461,28 @@ export default function Header({
               setIsOpen((v) => !v);
               if (!isOpen) refetch();
             }}
-            className="relative p-1.5 rounded-md hover-bg transition-colors"
+            className="relative p-1.5 rounded-md hover-bg transition-colors cursor-pointer"
             style={{ color: "var(--text-muted)" }}
             title="Notificaciones"
           >
-            <Bell size={16} />
+            <motion.div
+              key={ringKey}
+              animate={
+                unread > 0
+                  ? { rotate: [0, 15, -15, 10, -10, 5, 0] }
+                  : { rotate: 0 }
+              }
+              transition={{ duration: 0.6, ease: "easeInOut" }}
+            >
+              <Bell size={20} />
+            </motion.div>
             {unread > 0 && (
               <motion.span
+                key={`badge-${ringKey}`}
                 initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="absolute top-1 right-1 min-w-[14px] h-[14px] px-0.5 rounded-full flex items-center justify-center text-white font-bold"
+                animate={{ scale: [0, 1.3, 1] }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="absolute top-1 right-1 min-w-3.5 h-3.5 px-0.5 rounded-full flex items-center justify-center text-white font-bold"
                 style={{ fontSize: "9px", backgroundColor: "#EF4444" }}
               >
                 {unread > 9 ? "9+" : unread}
@@ -501,18 +565,23 @@ export default function Header({
                   {!loading &&
                     data?.items.map((n) => {
                       const style = PRIORITY_STYLES[n.priority];
-                      const Icon = style.icon;
+                      const isQuality = QUALITY_TYPES.has(n.type);
+                      const Icon = isQuality
+                        ? QUALITY_ICONS[n.type as QualityNotificationType]
+                        : style.icon;
+                      // Parpadeo rojo cuando la verificación de eficacia ya venció (plan §5.3).
+                      const isOverdue = n.type === "ac_due_verification" && n.priority === "high";
                       return (
                         <button
                           key={n.id}
-                          onClick={() => goToSession(n.session_id)}
+                          onClick={() => goToNotification(n)}
                           className="w-full text-left px-4 py-3 transition-colors hover-bg flex items-start gap-3"
                           style={{
                             borderBottom: "1px solid var(--border-color)",
                           }}
                         >
                           <div
-                            className="shrink-0 mt-0.5 w-7 h-7 rounded-full flex items-center justify-center"
+                            className={`shrink-0 mt-0.5 w-7 h-7 rounded-full flex items-center justify-center ${isOverdue ? "animate-pulse" : ""}`}
                             style={{
                               backgroundColor: style.bg,
                               border: `1px solid ${style.border}`,
@@ -570,7 +639,7 @@ export default function Header({
                             </div>
                           </div>
                           <div
-                            className="shrink-0 w-1.5 h-1.5 rounded-full mt-2"
+                            className={`shrink-0 w-1.5 h-1.5 rounded-full mt-2 ${isOverdue ? "animate-pulse" : ""}`}
                             style={{ backgroundColor: style.dot }}
                           />
                         </button>
@@ -578,22 +647,38 @@ export default function Header({
                     })}
                 </div>
 
-                {/* Footer */}
+                {/* Footer — el destino depende de qué tipos de notificación hay en la
+                    lista; antes siempre apuntaba a /calibration aunque todo el feed
+                    fuera de Calidad (o viceversa). */}
                 {data && data.total > 0 && (
                   <div
-                    className="px-4 py-2.5"
+                    className="px-4 py-2.5 flex flex-col gap-1"
                     style={{ borderTop: "1px solid var(--border-color)" }}
                   >
-                    <button
-                      onClick={() => {
-                        setIsOpen(false);
-                        router.push("/calibration");
-                      }}
-                      className="w-full text-center text-[10px] font-semibold transition-colors"
-                      style={{ color: "var(--brand-primary)" }}
-                    >
-                      Ver todas en Revisión y Emisión →
-                    </button>
+                    {data.items.some((n) => !QUALITY_TYPES.has(n.type)) && (
+                      <button
+                        onClick={() => {
+                          setIsOpen(false);
+                          router.push("/calibration");
+                        }}
+                        className="w-full text-center text-[10px] font-semibold transition-colors"
+                        style={{ color: "var(--brand-primary)" }}
+                      >
+                        Ver todas en Revisión y Emisión →
+                      </button>
+                    )}
+                    {data.items.some((n) => QUALITY_TYPES.has(n.type)) && (
+                      <button
+                        onClick={() => {
+                          setIsOpen(false);
+                          router.push("/quality/nc");
+                        }}
+                        className="w-full text-center text-[10px] font-semibold transition-colors"
+                        style={{ color: "var(--brand-primary)" }}
+                      >
+                        Ver todas en Gestión de Calidad →
+                      </button>
+                    )}
                   </div>
                 )}
               </motion.div>
@@ -604,11 +689,11 @@ export default function Header({
         {/* Logout */}
         <button
           onClick={handleLogout}
-          className="p-1.5 rounded-md hover-bg transition-colors hidden sm:block"
+          className="p-1.5 rounded-md hover-bg transition-colors hidden sm:block cursor-pointer"
           style={{ color: "var(--text-muted)" }}
           title="Cerrar sesión"
         >
-          <LogOut size={16} />
+          <LogOut size={20} />
         </button>
       </div>
     </header>
