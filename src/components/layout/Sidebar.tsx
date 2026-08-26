@@ -19,6 +19,9 @@ import {
   FileCode2,
   ScrollText,
   BookOpen,
+  ShieldAlert,
+  FileWarning,
+  CheckCheck,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -30,6 +33,7 @@ export default function Sidebar({
   onToggle: () => void;
 }) {
   const [isCalMenuOpen, setIsCalMenuOpen] = useState(true);
+  const [isQualityMenuOpen, setIsQualityMenuOpen] = useState(true);
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
 
@@ -43,7 +47,7 @@ export default function Sidebar({
     label: string;
   }) => {
     let isActive = pathname === href;
-    if (!isActive && href !== "/dashboard" && pathname.startsWith(href)) {
+    if (!isActive && href !== "/dashboard" && href !== "/quality" && pathname.startsWith(href)) {
       if (href === "/calibration" && pathname.startsWith("/calibration/new")) {
         isActive = false;
       } else {
@@ -168,6 +172,41 @@ export default function Sidebar({
               )}
             </AnimatePresence>
           </div>
+
+          {["technician", "auditor", "supervisor", "admin"].includes(user?.role ?? "") && (
+            <div className="pt-3 pb-1">
+              <button
+                onClick={() => setIsQualityMenuOpen(!isQualityMenuOpen)}
+                className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider hover-bg rounded-md transition-colors"
+                style={{ color: "var(--text-muted)" }}
+              >
+                <span className="flex items-center gap-1.5 whitespace-nowrap">
+                  Gestión de Calidad
+                </span>
+                <ChevronDown
+                  size={14}
+                  className={`transform transition-transform ${isQualityMenuOpen ? "" : "-rotate-90"} shrink-0`}
+                />
+              </button>
+
+              <AnimatePresence>
+                {isQualityMenuOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="overflow-hidden mt-1 ml-1.5 pl-1.5 space-y-0.5"
+                    style={{ borderLeft: "1px solid var(--border-color)" }}
+                  >
+                    <NavItem href="/quality" icon={<ShieldAlert size={14} />} label="Dashboard" />
+                    <NavItem href="/quality/nc" icon={<FileWarning size={14} />} label="No Conformidades" />
+                    <NavItem href="/quality/ac" icon={<CheckCheck size={14} />} label="Acciones Correctivas" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </div>
 
         {/* ── Admin section ── */}
