@@ -40,6 +40,8 @@ interface DataTableProps<TData, TValue> {
   pageSizeOptions?: number[];
   /** Optional id attribute for the search input — used by the tutorial system */
   searchId?: string;
+  /** Atributos HTML extra por fila (p.ej. draggable/onDragStart) — DataTable no sabe nada del dominio, solo los reenvía sobre el <tr>. */
+  getRowProps?: (row: TData) => React.HTMLAttributes<HTMLTableRowElement>;
 }
 
 export const DataTable = React.memo(function DataTable<TData, TValue>({
@@ -49,6 +51,7 @@ export const DataTable = React.memo(function DataTable<TData, TValue>({
   toolbarRight,
   pageSizeOptions = [10, 25, 50],
   searchId,
+  getRowProps,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
@@ -289,10 +292,13 @@ export const DataTable = React.memo(function DataTable<TData, TValue>({
                 </td>
               </tr>
             ) : (
-              table.getRowModel().rows.map((row) => (
+              table.getRowModel().rows.map((row) => {
+                const { className: extraClassName, ...extraProps } = getRowProps?.(row.original) ?? {};
+                return (
                 <tr
                   key={row.id}
-                  className="td-theme hover-bg transition-colors border-b last:border-0 border-(--border-color)"
+                  className={`td-theme hover-bg transition-colors border-b last:border-0 border-(--border-color) ${extraClassName ?? ""}`}
+                  {...extraProps}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="px-4 py-2.5">
@@ -303,7 +309,8 @@ export const DataTable = React.memo(function DataTable<TData, TValue>({
                     </td>
                   ))}
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>
