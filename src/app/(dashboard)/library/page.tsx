@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type DragEvent } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import toast from "react-hot-toast";
@@ -154,6 +154,40 @@ export default function LibraryPage() {
     },
     onError: (err) => toast.error(getApiError(err)),
   });
+
+  /* ── Mover documento (drag & drop sobre el árbol de carpetas) ── */
+  const [draggingDocId, setDraggingDocId] = useState<number | null>(null);
+
+  const moveMut = useMutation({
+    mutationFn: ({ id, folderId }: { id: number; folderId: number | null }) =>
+      api.patch(`/library/documents/${id}/move`, { folder_id: folderId }),
+    onSuccess: (_res, { folderId }) => {
+      qc.invalidateQueries({ queryKey: ["libraryDocuments"] });
+      setSelectedFolderId(folderId);
+    },
+    onError: () => {}, // el error real lo muestra toast.promise más abajo
+  });
+
+  const handleDropDocument = (documentId: number, folderId: number | null) => {
+    toast.promise(moveMut.mutateAsync({ id: documentId, folderId }), {
+      loading: "Moviendo documento…",
+      success: "Documento movido",
+      error: (err) => getApiError(err),
+    });
+  };
+
+  const getRowProps = perms.canManageFolders
+    ? (doc: LibraryDocument) => ({
+        draggable: true,
+        onDragStart: (e: DragEvent<HTMLTableRowElement>) => {
+          e.dataTransfer.setData("text/plain", String(doc.id));
+          e.dataTransfer.effectAllowed = "move";
+          setDraggingDocId(doc.id);
+        },
+        onDragEnd: () => setDraggingDocId(null),
+        className: draggingDocId === doc.id ? "opacity-40" : undefined,
+      })
+    : undefined;
 
   const handleDownload = async (doc: LibraryDocument) => {
     try {
@@ -357,6 +391,8 @@ export default function LibraryPage() {
           onCreateFolder={setCreateFolderParentId}
           onRenameFolder={setRenameFolder}
           onDeleteFolder={setDeleteFolder}
+          canDropDocument={perms.canManageFolders}
+          onDropDocument={handleDropDocument}
         />
 
         <div className="flex-1 min-w-0 space-y-2">
@@ -377,6 +413,7 @@ export default function LibraryPage() {
               columns={columns}
               data={visibleDocuments}
               searchPlaceholder="Buscar por título o categoría…"
+              getRowProps={getRowProps}
             />
           )}
         </div>

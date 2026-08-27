@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Download, FileText, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 import qualityApi from "@/lib/qualityApi";
@@ -11,6 +11,48 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Miniatura de la imagen (pide el blob autenticado una sola vez y libera el object URL al desmontar). */
+function AttachmentThumbnail({ attachment }: { attachment: QualityAttachment }) {
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let cancelled = false;
+
+    qualityApi.getAttachmentBlob(attachment.id).then((blob) => {
+      if (cancelled) return;
+      objectUrl = window.URL.createObjectURL(blob);
+      setSrc(objectUrl);
+    });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) window.URL.revokeObjectURL(objectUrl);
+    };
+  }, [attachment.id]);
+
+  if (!src) {
+    return (
+      <div
+        className="h-9 w-9 rounded flex items-center justify-center shrink-0"
+        style={{ backgroundColor: "var(--bg-app)" }}
+      >
+        <Loader2 size={14} className="animate-spin" style={{ color: "var(--text-muted)" }} />
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- object URL de un blob autenticado, no una URL remota que next/image pueda optimizar.
+    <img
+      src={src}
+      alt={attachment.original_name}
+      className="h-9 w-9 rounded object-cover shrink-0"
+      style={{ border: "1px solid var(--border-color)" }}
+    />
+  );
 }
 
 export default function QualityAttachmentList({
@@ -50,7 +92,16 @@ export default function QualityAttachmentList({
             border: "1px solid var(--border-color)",
           }}
         >
-          <FileText size={18} style={{ color: "var(--text-muted)" }} className="shrink-0" />
+          {att.mime_type.startsWith("image/") ? (
+            <AttachmentThumbnail attachment={att} />
+          ) : (
+            <div
+              className="h-9 w-9 rounded flex items-center justify-center shrink-0"
+              style={{ backgroundColor: "var(--bg-app)" }}
+            >
+              <FileText size={18} style={{ color: "var(--text-muted)" }} />
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <p
               className="text-sm font-medium truncate"

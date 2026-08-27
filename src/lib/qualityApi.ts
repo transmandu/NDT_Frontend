@@ -198,6 +198,14 @@ export const qualityApi = {
       })
       .then((r) => downloadBlob(r.data, filename)),
 
+  /** Igual que downloadAttachment pero devuelve el Blob crudo, para previsualizar imágenes en vez de descargarlas. */
+  getAttachmentBlob: (attachmentId: number) =>
+    api
+      .get<Blob>(`/quality/attachments/${attachmentId}/download`, {
+        responseType: "blob",
+      })
+      .then((r) => r.data),
+
   /* ─── Esquemas de causa raíz ──────────────────────────── */
   listMethodSchemas: () =>
     api
