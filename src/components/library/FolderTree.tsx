@@ -13,6 +13,9 @@ interface FolderTreeProps {
   onCreateFolder: (parentId: number | null) => void;
   onRenameFolder: (folder: LibraryFolderNode) => void;
   onDeleteFolder: (folder: LibraryFolderNode) => void;
+  /** Si el usuario puede soltar documentos arrastrados sobre carpetas (canManageFolders). */
+  canDropDocument: boolean;
+  onDropDocument: (documentId: number, folderId: number | null) => void;
 }
 
 export function FolderTree({
@@ -23,6 +26,8 @@ export function FolderTree({
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
+  canDropDocument,
+  onDropDocument,
 }: FolderTreeProps) {
   return (
     <div className="panel rounded-md shadow-sm p-2 w-64 shrink-0 flex flex-col gap-0.5">
@@ -48,6 +53,8 @@ export function FolderTree({
       <RootRow
         active={selectedFolderId === null}
         onClick={() => onSelect(null)}
+        canDropDocument={canDropDocument}
+        onDropDocument={onDropDocument}
       />
 
       <div className="overflow-y-auto max-h-[60vh]">
@@ -62,6 +69,8 @@ export function FolderTree({
             onCreateFolder={onCreateFolder}
             onRenameFolder={onRenameFolder}
             onDeleteFolder={onDeleteFolder}
+            canDropDocument={canDropDocument}
+            onDropDocument={onDropDocument}
           />
         ))}
         {folders.length === 0 && (
@@ -77,17 +86,44 @@ export function FolderTree({
   );
 }
 
-function RootRow({ active, onClick }: { active: boolean; onClick: () => void }) {
+function RootRow({
+  active,
+  onClick,
+  canDropDocument,
+  onDropDocument,
+}: {
+  active: boolean;
+  onClick: () => void;
+  canDropDocument: boolean;
+  onDropDocument: (documentId: number, folderId: number | null) => void;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+
   return (
     <button
       onClick={onClick}
+      onDragOver={canDropDocument ? (e) => { e.preventDefault(); setDragOver(true); } : undefined}
+      onDragLeave={canDropDocument ? () => setDragOver(false) : undefined}
+      onDrop={
+        canDropDocument
+          ? (e) => {
+              e.preventDefault();
+              setDragOver(false);
+              const documentId = Number(e.dataTransfer.getData("text/plain"));
+              if (documentId) onDropDocument(documentId, null);
+            }
+          : undefined
+      }
       className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors text-left"
       style={{
-        backgroundColor: active
-          ? "color-mix(in srgb, var(--brand-primary) 15%, transparent)"
-          : "transparent",
+        backgroundColor: dragOver
+          ? `${C.accent}25`
+          : active
+            ? "color-mix(in srgb, var(--brand-primary) 15%, transparent)"
+            : "transparent",
         color: active ? "var(--brand-primary)" : "var(--text-main)",
         fontWeight: active ? 600 : 500,
+        border: dragOver ? `1.5px dashed ${C.accent}` : "1.5px solid transparent",
       }}
     >
       <FolderOpen size={14} /> Todos los documentos
@@ -104,6 +140,8 @@ function FolderNode({
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
+  canDropDocument,
+  onDropDocument,
 }: {
   node: LibraryFolderNode;
   depth: number;
@@ -113,8 +151,11 @@ function FolderNode({
   onCreateFolder: (parentId: number | null) => void;
   onRenameFolder: (folder: LibraryFolderNode) => void;
   onDeleteFolder: (folder: LibraryFolderNode) => void;
+  canDropDocument: boolean;
+  onDropDocument: (documentId: number, folderId: number | null) => void;
 }) {
   const [open, setOpen] = useState(true);
+  const [dragOver, setDragOver] = useState(false);
   const active = selectedFolderId === node.id;
   const hasChildren = node.children.length > 0;
 
@@ -122,10 +163,25 @@ function FolderNode({
     <div>
       <div
         className="group flex items-center gap-1 rounded-md pr-1 transition-colors"
+        onDragOver={canDropDocument ? (e) => { e.preventDefault(); setDragOver(true); } : undefined}
+        onDragLeave={canDropDocument ? () => setDragOver(false) : undefined}
+        onDrop={
+          canDropDocument
+            ? (e) => {
+                e.preventDefault();
+                setDragOver(false);
+                const documentId = Number(e.dataTransfer.getData("text/plain"));
+                if (documentId) onDropDocument(documentId, node.id);
+              }
+            : undefined
+        }
         style={{
-          backgroundColor: active
-            ? "color-mix(in srgb, var(--brand-primary) 15%, transparent)"
-            : "transparent",
+          backgroundColor: dragOver
+            ? `${C.accent}25`
+            : active
+              ? "color-mix(in srgb, var(--brand-primary) 15%, transparent)"
+              : "transparent",
+          border: dragOver ? `1.5px dashed ${C.accent}` : "1.5px solid transparent",
           paddingLeft: 6 + depth * 14,
         }}
       >
@@ -200,6 +256,8 @@ function FolderNode({
             onCreateFolder={onCreateFolder}
             onRenameFolder={onRenameFolder}
             onDeleteFolder={onDeleteFolder}
+            canDropDocument={canDropDocument}
+            onDropDocument={onDropDocument}
           />
         ))}
     </div>
