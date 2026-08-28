@@ -125,7 +125,7 @@ export default function NonconformityDetailPage() {
           {nc.description}
         </p>
 
-        <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 text-sm">
           <Info label="Detectada por" value={nc.detector?.name} />
           <Info label="Fecha de detección" value={nc.detected_at ? new Date(nc.detected_at).toLocaleDateString("es-ES") : null} />
           {nc.due_date_verification && (
@@ -146,7 +146,7 @@ export default function NonconformityDetailPage() {
         </div>
 
         {(nc.impact_assessment || nc.immediate_actions) && (
-          <div className="grid grid-cols-2 gap-4 mt-3 pt-3" style={{ borderTop: "1px solid var(--border-color)" }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-3" style={{ borderTop: "1px solid var(--border-color)" }}>
             {nc.impact_assessment && (
               <div>
                 <p className="text-[9px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
@@ -318,7 +318,7 @@ function CreateAcModal({ nonconformityId, onClose }: { nonconformityId: number; 
             <label className="text-xs font-semibold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>Descripción *</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="field-input w-full resize-none text-xs" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>Método de causa raíz</label>
               <select value={methodSchemaId} onChange={(e) => setMethodSchemaId(e.target.value)} className="field-input w-full text-xs">

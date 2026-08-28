@@ -71,14 +71,14 @@ export function DashboardModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <StatTile label="Documentos" value={total} color={C.accent} />
             <StatTile label="Vencidos" value={expired} color={C.danger} />
             <StatTile label="Por vencer (≤5d)" value={expiringSoon} color={C.warning} />
             <StatTile label="Accesos externos" value={totalAccesses} color={C.info} />
           </div>
 
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="panel rounded-lg p-4" style={{ border: "1px solid var(--border-color)" }}>
               <p className="text-sm font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>Distribución por categoría</p>
               {byCategory.length === 0 ? (

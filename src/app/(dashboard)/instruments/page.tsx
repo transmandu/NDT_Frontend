@@ -929,7 +929,7 @@ function InstrumentModal({
                 Selecciona el tipo de equipo. Solo se muestran los
                 procedimientos implementados:
               </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {INSTRUMENT_TYPES.map((type) => (
                   <motion.button
                     key={type.code}
@@ -976,7 +976,7 @@ function InstrumentModal({
             <form onSubmit={handleSubmit(onSubmit)}>
               <div className="px-6 py-5 space-y-5">
                 <Section title="Identificación del Equipo">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field
                       label="Código Interno"
                       error={errors.internal_code?.message}
@@ -1062,7 +1062,7 @@ function InstrumentModal({
                 </Section>
 
                 <Section title="Características Metrológicas">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field
                       label="Unidad de Medida *"
                       error={errors.unit?.message}

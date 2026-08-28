@@ -465,7 +465,7 @@ export default function SchemaModal({
             {tab === "basic" ? (
               <div className="space-y-4">
                 {/* Row 1: code + version */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field
                     label="Código *"
                     error={errors.code?.message}
@@ -504,7 +504,7 @@ export default function SchemaModal({
                 </Field>
 
                 {/* Row 3: category + is_active */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Categoría *" error={errors.category?.message}>
                     <select {...register("category")} className="field-input">
                       <option value="">— Seleccionar —</option>

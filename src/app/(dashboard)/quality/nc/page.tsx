@@ -43,7 +43,7 @@ function buildColumns(): ColumnDef<Nonconformity>[] {
       accessorKey: "code",
       header: "Código",
       cell: ({ getValue }) => (
-        <span className="font-mono font-bold text-sm text-center" style={{ color: C.primary }}>
+        <span className="font-mono font-bold text-sm" style={{ color: C.primary }}>
           {getValue<string>()}
         </span>
       ),
@@ -73,7 +73,7 @@ function buildColumns(): ColumnDef<Nonconformity>[] {
       meta: { tourId: "tour-nc-col-status" },
       enableColumnFilter: true,
       accessorFn: (row) => row.status,
-      cell: ({ row }) => <div className="text-center"><QualityStatusBadge kind="nc" status={row.original.status} /></div>,
+      cell: ({ row }) => <QualityStatusBadge kind="nc" status={row.original.status} />,
     },
     {
       accessorKey: "risk_level",
@@ -81,8 +81,8 @@ function buildColumns(): ColumnDef<Nonconformity>[] {
       enableColumnFilter: true,
       cell: ({ getValue }) => {
         const v = getValue<string | null>();
-        if (!v) return <span className="text-center block" style={{ color: "var(--text-muted)" }}>—</span>;
-        return <span className="capitalize text-sm text-center block" style={{ color: "var(--text-main)" }}>{v}</span>;
+        if (!v) return <span style={{ color: "var(--text-muted)" }}>—</span>;
+        return <span className="capitalize text-sm" style={{ color: "var(--text-main)" }}>{v}</span>;
       },
     },
     {
@@ -90,7 +90,7 @@ function buildColumns(): ColumnDef<Nonconformity>[] {
       header: "Detectada por",
       accessorFn: (row) => row.detector?.name ?? "",
       cell: ({ row }) => (
-        <span className="text-sm text-center block" style={{ color: "var(--text-muted)" }}>
+        <span className="text-sm" style={{ color: "var(--text-muted)" }}>
           {row.original.detector?.name ?? "—"}
         </span>
       ),
@@ -101,7 +101,7 @@ function buildColumns(): ColumnDef<Nonconformity>[] {
       cell: ({ getValue }) => {
         const v = getValue<string | null>();
         return (
-          <span className="text-sm font-mono text-center block" style={{ color: "var(--text-muted)" }}>
+          <span className="text-sm font-mono" style={{ color: "var(--text-muted)" }}>
             {v ? new Date(v).toLocaleDateString("es-ES") : "—"}
           </span>
         );
@@ -114,9 +114,9 @@ function buildColumns(): ColumnDef<Nonconformity>[] {
       enableColumnFilter: false,
       size: 60,
       cell: ({ row }) => (
-        <Link 
+        <Link
           href={`/quality/nc/${row.original.id}`}
-          className="text-sm font-semibold text-center block"
+          className="text-sm font-semibold"
           style={{ color: C.primary }}
         >
           Ver →
@@ -254,7 +254,7 @@ function ReportNcModal({ onClose }: { onClose: () => void }) {
               {errors.description && <p className="text-sm text-red-400">{errors.description.message}</p>}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>
                   Nivel de riesgo

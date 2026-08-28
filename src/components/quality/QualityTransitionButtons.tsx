@@ -277,15 +277,15 @@ function ReasonModal({
         style={{ backgroundColor: "var(--bg-panel)", border: "1px solid var(--border-color)" }}
       >
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-bold" style={{ color: "var(--text-main)" }}>
+          <h3 className="text-md font-bold" style={{ color: "var(--text-main)" }}>
             {title}
           </h3>
-          <button onClick={onCancel} style={{ color: "var(--text-muted)" }}>
-            <X size={16} />
+          <button onClick={onCancel} style={{ color: "var(--text-muted)" }} className="cursor-pointer font-bold">
+            <X size={18} />
           </button>
         </div>
         <label
-          className="text-[10px] font-semibold uppercase tracking-wider block mb-1.5"
+          className="text-xs font-semibold uppercase tracking-wider block mb-1.5"
           style={{ color: "var(--text-muted)" }}
         >
           Razón *
@@ -301,7 +301,7 @@ function ReasonModal({
         <div className="flex justify-end gap-2 mt-4">
           <button
             onClick={onCancel}
-            className="h-8 px-4 rounded text-[11px] font-medium hover-bg"
+            className="h-8 px-4 rounded text-sm font-bold cursor-pointer hover-bg"
             style={{ color: "var(--text-muted)", border: "1px solid var(--border-color)" }}
           >
             Volver
@@ -309,7 +309,7 @@ function ReasonModal({
           <button
             disabled={!reason.trim()}
             onClick={() => onConfirm(reason.trim())}
-            className="h-8 px-4 rounded text-[11px] font-semibold text-white disabled:opacity-50"
+            className="h-8 px-4 rounded text-xs font-bold cursor-pointer text-white disabled:opacity-50"
             style={{ backgroundColor: C.danger }}
           >
             Confirmar Cancelación

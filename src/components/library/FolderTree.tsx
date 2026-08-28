@@ -30,7 +30,7 @@ export function FolderTree({
   onDropDocument,
 }: FolderTreeProps) {
   return (
-    <div className="panel rounded-md shadow-sm p-2 w-64 shrink-0 flex flex-col gap-0.5">
+    <div className="panel rounded-md shadow-sm p-2 w-full md:w-64 md:shrink-0 flex flex-col gap-0.5">
       <div className="flex items-center justify-between px-1.5 py-1.5">
         <p
           className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"
@@ -57,7 +57,7 @@ export function FolderTree({
         onDropDocument={onDropDocument}
       />
 
-      <div className="overflow-y-auto max-h-[60vh]">
+      <div className="overflow-y-auto max-h-48 md:max-h-[60vh]">
         {folders.map((node) => (
           <FolderNode
             key={node.id}

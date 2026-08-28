@@ -133,7 +133,7 @@ export function UploadModal({
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej: Procedimiento de calibración de balanzas" className="field-input text-xs" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>Categoría *</label>
               <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="field-input uppercase">
