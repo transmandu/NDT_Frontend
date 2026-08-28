@@ -22,20 +22,32 @@ import {
   ShieldAlert,
   FileWarning,
   CheckCheck,
+  X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function Sidebar({
   isOpen,
   onToggle,
+  isMobileOpen,
+  onMobileClose,
 }: {
   isOpen: boolean;
   onToggle: () => void;
+  /** Estado del drawer off-canvas en móvil — independiente del colapso de escritorio (isOpen). */
+  isMobileOpen: boolean;
+  onMobileClose: () => void;
 }) {
   const [isCalMenuOpen, setIsCalMenuOpen] = useState(true);
   const [isQualityMenuOpen, setIsQualityMenuOpen] = useState(true);
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
+
+  // Cierra el drawer móvil al navegar — nadie espera que siga abierto tapando la página nueva.
+  useEffect(() => {
+    onMobileClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   const NavItem = ({
     href,
@@ -267,33 +279,72 @@ export default function Sidebar({
   );
 
   return (
-    <motion.aside
-      id="tour-sidebar"
-      initial={false}
-      animate={{ width: isOpen ? 240 : 0 }}
-      transition={{ duration: 0.15, ease: "easeOut" }}
-      className="hidden md:flex relative inset-y-0 left-0 z-40 flex-col panel shadow-sm overflow-visible shrink-0"
-      style={{
-        borderRightWidth: isOpen ? "1px" : "0px",
-        borderRightStyle: "solid",
-        borderRightColor: "var(--border-color)",
-      }}
-    >
-      {/* Toggle button */}
-      <button
-        onClick={onToggle}
-        className={`absolute -right-3 top-4 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300 z-50 border cursor-pointer ${
-          isOpen
-            ? "bg-(--bg-panel) border-(--brand-primary) text-(--brand-primary) hover:bg-orange-50 shadow-md"
-            : "bg-(--brand-primary) border-(--brand-primary) text-white neon-glow hover:scale-110"
-        }`}
+    <>
+      {/* ── Escritorio: sidebar colapsable que empuja el layout ── */}
+      <motion.aside
+        id="tour-sidebar"
+        initial={false}
+        animate={{ width: isOpen ? 240 : 0 }}
+        transition={{ duration: 0.15, ease: "easeOut" }}
+        className="hidden md:flex relative inset-y-0 left-0 z-40 flex-col panel shadow-sm overflow-visible shrink-0"
+        style={{
+          borderRightWidth: isOpen ? "1px" : "0px",
+          borderRightStyle: "solid",
+          borderRightColor: "var(--border-color)",
+        }}
       >
-        {isOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
-      </button>
+        {/* Toggle button */}
+        <button
+          onClick={onToggle}
+          className={`absolute -right-3 top-4 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300 z-50 border cursor-pointer ${
+            isOpen
+              ? "bg-(--bg-panel) border-(--brand-primary) text-(--brand-primary) hover:bg-orange-50 shadow-md"
+              : "bg-(--brand-primary) border-(--brand-primary) text-white neon-glow hover:scale-110"
+          }`}
+        >
+          {isOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+        </button>
 
-      <div className="absolute top-0 right-0 h-full overflow-hidden">
-        {SidebarContent()}
-      </div>
-    </motion.aside>
+        <div className="absolute top-0 right-0 h-full overflow-hidden">
+          {SidebarContent()}
+        </div>
+      </motion.aside>
+
+      {/* ── Móvil: drawer off-canvas sobre un backdrop, no empuja nada ── */}
+      <AnimatePresence>
+        {isMobileOpen && (
+          <motion.div
+            key="sidebar-mobile-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="md:hidden fixed inset-0 z-40"
+            style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
+            onClick={onMobileClose}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {isMobileOpen && (
+          <motion.div
+            key="sidebar-mobile-drawer"
+            initial={{ x: "-100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "-100%" }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="md:hidden fixed inset-y-0 left-0 z-50 w-60 max-w-[80vw] shadow-2xl"
+          >
+            <button
+              onClick={onMobileClose}
+              className="absolute -right-3 top-4 w-6 h-6 rounded-full flex items-center justify-center border cursor-pointer bg-(--bg-panel) border-(--brand-primary) text-(--brand-primary) shadow-md"
+            >
+              <X size={14} />
+            </button>
+            {SidebarContent()}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

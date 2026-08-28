@@ -341,7 +341,7 @@ export default function LibraryPage() {
           <h1 className="text-md font-bold" style={{ color: "var(--text-main)" }}>Biblioteca Digital</h1>
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>Procedimientos, manuales y normas del laboratorio</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setRequestsOpen(true)}
             className="h-8 px-3 text-sm rounded font-semibold flex items-center gap-1.5 hover-bg transition-colors relative cursor-pointer"
@@ -382,7 +382,7 @@ export default function LibraryPage() {
         </div>
       </div>
 
-      <div className="flex gap-3 items-start">
+      <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-start">
         <FolderTree
           folders={folders}
           selectedFolderId={selectedFolderId}

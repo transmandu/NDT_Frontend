@@ -436,7 +436,7 @@ export default function SchemasPage() {
   return (
     <div className="space-y-4 w-full animate-fadeIn">
       {/* ── Stats strip ── */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           {
             label: "Total Esquemas",

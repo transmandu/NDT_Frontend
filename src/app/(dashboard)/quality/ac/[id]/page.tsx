@@ -161,18 +161,18 @@ export default function CorrectiveActionDetailPage() {
 
         <p className="text-sm mt-3 leading-relaxed" style={{ color: "var(--text-main)" }}>{ac.description}</p>
 
-        <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 text-sm">
           {canEdit ? (
             <div className="space-y-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>Responsable</span>
+              <span className="text-xs font-semibold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>Responsable</span>
               <select
                 value={ac.assignee?.id ?? ""}
                 onChange={(e) => updateMut.mutate({ assigned_to: e.target.value ? Number(e.target.value) : null })}
-                className="field-input w-full max-w-xs"
+                className="field-input w-full max-w-xs text-xs"
               >
-                <option value="">— Sin asignar —</option>
+                <option value=""  className="text-xs">— Sin asignar —</option>
                 {assignableUsers.map((u) => (
-                  <option key={u.id} value={u.id}>{u.name}{u.role ? ` (${u.role})` : ""}</option>
+                  <option className="text-xs" key={u.id} value={u.id}>{u.name}{u.role ? ` (${u.role})` : ""}</option>
                 ))}
               </select>
             </div>

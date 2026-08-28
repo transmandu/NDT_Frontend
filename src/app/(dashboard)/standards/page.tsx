@@ -719,7 +719,7 @@ function StandardModal({
               >
                 ¿Qué magnitud mide este patrón?
               </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {STANDARD_CATEGORIES.map((cat) => (
                   <motion.button
                     key={cat.category}
@@ -768,7 +768,7 @@ function StandardModal({
               <div className="px-6 py-5 space-y-5">
                 {/* Identificación */}
                 <Sec title="Identificación del Patrón">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Fld
                       label="Código Interno"
                       error={errors.internal_code?.message}
@@ -847,7 +847,7 @@ function StandardModal({
 
                 {/* Características Metrológicas */}
                 <Sec title="Características Metrológicas">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Fld label="Unidad de Medida" error={errors.unit?.message}>
                       <input
                         {...register("unit")}
@@ -936,7 +936,7 @@ function StandardModal({
 
                 {/* Certificado y vigencia */}
                 <Sec title="Certificado y Vigencia">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Fld
                       label="N° Certificado de Calibración *"
                       error={errors.certificate_number?.message}

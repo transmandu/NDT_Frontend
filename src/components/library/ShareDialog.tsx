@@ -134,7 +134,7 @@ export function ShareDialog({
             <label className="text-[12px] font-semibold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>Justificación * (mín. 10 caracteres)</label>
             <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="Motivo para compartir este documento" className="field-input text-[13px] resize-none justify-center" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-[12px] font-semibold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>Duración (24–168 h)</label>
               <input type="number" min={24} max={168} value={expiresInHours} onChange={(e) => setExpiresInHours(e.target.value)} className="field-input text-[13px]" />

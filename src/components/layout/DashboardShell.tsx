@@ -54,10 +54,19 @@ export default function DashboardShell({
   const router = useRouter();
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   useEffect(() => {
     if (_hasHydrated && !isAuthenticated) router.replace("/login");
   }, [_hasHydrated, isAuthenticated, router]);
+
+  // Bloquea el scroll de fondo mientras el drawer móvil está abierto encima.
+  useEffect(() => {
+    document.body.style.overflow = isMobileNavOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isMobileNavOpen]);
 
   if (!_hasHydrated) return null;
   if (!isAuthenticated) return null;
@@ -84,6 +93,8 @@ export default function DashboardShell({
         <Sidebar
           isOpen={isSidebarOpen}
           onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+          isMobileOpen={isMobileNavOpen}
+          onMobileClose={() => setIsMobileNavOpen(false)}
         />
         <main
           className="flex-1 flex flex-col min-w-0 relative"
@@ -93,7 +104,7 @@ export default function DashboardShell({
             title={info.title}
             subtitle={info.subtitle}
             showAutoSave={info.autoSave}
-            onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            onMenuClick={() => setIsMobileNavOpen((v) => !v)}
           />
           <div className="flex-1 overflow-y-auto overflow-x-hidden relative z-0">
             <AnimatePresence mode="wait">
