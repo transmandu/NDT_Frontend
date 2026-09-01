@@ -28,13 +28,14 @@ const ROLE_LABELS: Record<string, string> = {
   admin:    'Administrador',
   auditor:  'Auditor',
   technician: 'Técnico',
+  supervisor: 'Supervisor',
 };
 
 /* ─── Zod Schema ─────────────────────────────────────────── */
 const userSchema = z.object({
   name:                  z.string().min(2, 'Mínimo 2 caracteres'),
   email:                 z.string().email('Email inválido'),
-  role:                  z.enum(['admin', 'auditor', 'technician']),
+  role:                  z.enum(['admin', 'auditor', 'technician', 'supervisor']),
   password:              z.string().min(8, 'Mínimo 8 caracteres').optional().or(z.literal('')),
   password_confirmation: z.string().optional().or(z.literal('')),
 }).refine(d => !d.password || d.password === d.password_confirmation, {
@@ -134,7 +135,7 @@ function buildColumns(onEdit: (u: User) => void, onDelete: (u: User) => void): C
 type UserPayload = {
   name: string;
   email: string;
-  role: 'admin' | 'auditor' | 'technician';
+  role: 'admin' | 'auditor' | 'technician' | 'supervisor';
   password?: string;
   password_confirmation?: string;
 };
@@ -300,7 +301,7 @@ function UserModal({ user, onClose, onSave, saving }: {
     defaultValues: isEdit && user ? {
       name:  user.name,
       email: user.email,
-      role:  user.role as 'admin' | 'auditor' | 'technician',
+      role:  user.role as 'admin' | 'auditor' | 'technician' | 'supervisor',
     } : { role: 'technician' },
   });
 
@@ -360,6 +361,7 @@ function UserModal({ user, onClose, onSave, saving }: {
               <select {...register('role')} className="field-input w-full">
                 <option value="technician">Técnico — registra calibraciones</option>
                 <option value="auditor">Auditor — aprueba / rechaza</option>
+                <option value="supervisor">Supervisor — supervisa operaciones</option>
                 <option value="admin">Administrador — acceso total</option>
               </select>
               {errors.role && <p className="text-[10px] text-red-400">{errors.role.message}</p>}
