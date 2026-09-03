@@ -50,6 +50,7 @@ const STATUS_BADGE: Record<ExpiryStatus | "n/a", { label: string; color: string 
 function fileIcon(fileType: string | null) {
   if (fileType === "pdf") return <FileText size={14} style={{ color: C.danger }} />;
   if (fileType === "xlsx" || fileType === "xls") return <FileSpreadsheet size={14} style={{ color: "#10B981" }} />;
+  if (fileType === "doc" || fileType === "docx") return <FileText size={14} style={{ color: "#2563EB" }} />;
   return <FileIcon size={14} style={{ color: "var(--text-muted)" }} />;
 }
 

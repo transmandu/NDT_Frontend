@@ -14,7 +14,7 @@ import { VisibilityPicker } from "./VisibilityPicker";
 import type { LibraryCategory, LibraryFolderNode, LibraryRole } from "@/types/library";
 
 const MAX_SIZE_MB = 10;
-const ACCEPTED_EXT = [".pdf", ".xlsx", ".xls"];
+const ACCEPTED_EXT = [".pdf", ".xlsx", ".xls", ".doc", ".docx"];
 
 export function UploadModal({
   categories,
@@ -67,7 +67,7 @@ export function UploadModal({
     if (!f) return setFile(null);
     const ext = "." + f.name.split(".").pop()?.toLowerCase();
     if (!ACCEPTED_EXT.includes(ext)) {
-      setFileError("Solo se permiten formatos PDF y Excel (.xlsx, .xls).");
+      setFileError("Solo se permiten formatos PDF, Excel (.xlsx, .xls) y Word (.doc, .docx).");
       setFile(null);
       return;
     }
@@ -172,7 +172,7 @@ export function UploadModal({
               <span className="text-[11px]" style={{ color: "var(--text-main)" }}>
                 {file ? file.name : "Haz clic para elegir un archivo"}
               </span>
-              <input type="file" accept=".pdf,.xlsx,.xls" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} />
+              <input type="file" accept=".pdf,.xlsx,.xls,.doc,.docx" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} />
             </label>
             {fileError && <p className="text-[10px]" style={{ color: C.danger }}>{fileError}</p>}
           </div>
