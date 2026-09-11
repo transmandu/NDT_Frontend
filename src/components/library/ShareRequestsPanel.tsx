@@ -79,7 +79,6 @@ export function ShareRequestsPanel({
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50"
       style={{ backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(2px)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <motion.div
         initial={{ x: "100%" }}
