@@ -379,9 +379,6 @@ export default function SchemaModal({
         backgroundColor: "rgba(0,0,0,0.6)",
         backdropFilter: "blur(4px)",
       }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}

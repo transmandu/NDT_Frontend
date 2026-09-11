@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
+import { roleLabel } from "@/lib/roleLabels";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Home,
@@ -100,7 +101,7 @@ export default function Sidebar({
               fill
               sizes="256px"
               quality={100}
-              className="object-contain scale-[1.25]"
+              className="object-contain scale-[1.05]"
               priority
             />
           </div>
@@ -270,7 +271,7 @@ export default function Sidebar({
               className="text-[9px] truncate"
               style={{ color: "var(--text-muted)" }}
             >
-              {user?.role || "Rol"}
+              {roleLabel(user?.role)}
             </p>
           </div>
         </div>

@@ -21,6 +21,8 @@ import toast from "react-hot-toast";
 import type {
   Instrument,
   Standard,
+  Client,
+  CalibrationLocation,
   GridSchema,
   BudgetPreview,
   BudgetPoint,
@@ -32,6 +34,8 @@ import type {
 import DynamicGrid, {
   type GridData,
 } from "@/components/calibration/DynamicGrid";
+import { AddClientModal } from "@/components/calibration/AddClientModal";
+import { AddCalibrationLocationModal } from "@/components/calibration/AddCalibrationLocationModal";
 import { isSameCategory } from "@/lib/categoryUtils";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -134,6 +138,17 @@ export default function NewCalibrationPage() {
       api.get("/calibration/schemas").then((res) => res.data.schemas || []),
   });
 
+  const { data: clients = [] } = useQuery<Client[]>({
+    queryKey: ["clients"],
+    queryFn: () => api.get("/clients").then((res) => res.data.data || []),
+  });
+
+  const { data: calibrationLocations = [] } = useQuery<CalibrationLocation[]>({
+    queryKey: ["calibrationLocations"],
+    queryFn: () =>
+      api.get("/calibration-locations").then((res) => res.data.data || []),
+  });
+
   const loading = loadingInstruments || loadingStandards || loadingSchemas;
 
   // ─── Selections ───
@@ -144,6 +159,27 @@ export default function NewCalibrationPage() {
   const [selectedStandard, setSelectedStandard] = useState("");
   // M-LAB-01 (Termohigrómetro) requiere un segundo patrón independiente para HR
   const [selectedStandard2, setSelectedStandard2] = useState("");
+
+  // ── Cliente / Lugar de Calibración (certificado ISO 7.8.2.e) ──
+  // El N° de OT ya no se ingresa aquí: el backend lo asigna automáticamente al crear la sesión.
+  const [selectedClient, setSelectedClient] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState("");
+  const [receptionDate, setReceptionDate] = useState("");
+  const [tempFinal, setTempFinal] = useState("");
+  const [showAddClient, setShowAddClient] = useState(false);
+  const [showAddLocation, setShowAddLocation] = useState(false);
+
+  const handleClientCreated = async (created: Client) => {
+    await queryClient.invalidateQueries({ queryKey: ["clients"] });
+    setSelectedClient(String(created.id));
+    setShowAddClient(false);
+  };
+
+  const handleLocationCreated = async (created: CalibrationLocation) => {
+    await queryClient.invalidateQueries({ queryKey: ["calibrationLocations"] });
+    setSelectedLocation(String(created.id));
+    setShowAddLocation(false);
+  };
 
   // ── Environmental / Metadata ──
   const [environmentalData, setEnvironmentalData] = useState<
@@ -175,6 +211,21 @@ export default function NewCalibrationPage() {
 
   // ─── Grid data storage: gridId → { rowIdx → { colKey → value } } ───
   const [gridDataMap, setGridDataMap] = useState<Record<string, GridData>>({});
+
+  // ─── Grids marked "No aplica" (ej. el vernier no tiene esa función, o no
+  // se calibró en esta sesión) — se excluyen de la validación y se declaran
+  // explícitamente en el payload en vez de omitirse en silencio ───
+  const [notApplicableGrids, setNotApplicableGrids] = useState<Set<string>>(
+    new Set(),
+  );
+  const toggleNotApplicable = useCallback((gridId: string) => {
+    setNotApplicableGrids((prev) => {
+      const next = new Set(prev);
+      if (next.has(gridId)) next.delete(gridId);
+      else next.add(gridId);
+      return next;
+    });
+  }, []);
 
   // ─── Submission state ───
   const [submitting, setSubmitting] = useState(false);
@@ -428,16 +479,25 @@ export default function NewCalibrationPage() {
   );
   const baseSchemaCode =
     selectedInst && schemas.length > 0
-      ? schemas.find(
-          (s: { category?: string; code?: string }) =>
-            s.category?.toLowerCase() === selectedInst.category?.toLowerCase(),
+      ? schemas.find((s: { category?: string; code?: string }) =>
+          isSameCategory(s.category, selectedInst.category),
         )?.code
       : null;
 
+  // True once the instrument is chosen but no active procedure schema matches
+  // its category — used to surface a visible warning instead of silently
+  // hiding the rest of the flow.
+  const noSchemaForCategory = Boolean(
+    selectedInst && schemas.length > 0 && !baseSchemaCode,
+  );
+
   // ─── Load full schema when instrument changes ───
   // staleTime: 0 → always fetches fresh schema (avoids stale cache after reseeds)
-  const { data: matchedSchema = null, isFetching: loadingSchema } =
-    useQuery<ProcedureSchema | null>({
+  const {
+    data: matchedSchema = null,
+    isFetching: loadingSchema,
+    isError: schemaLoadError,
+  } = useQuery<ProcedureSchema | null>({
       queryKey: ["schema", baseSchemaCode],
       queryFn: () =>
         api
@@ -478,7 +538,9 @@ export default function NewCalibrationPage() {
     // If there is already a valid selection (e.g. recovered from draft), keep it
     if (selectedStandard) {
       const stillValid = filteredStandards.some(
-        (s) => String(s.id) === selectedStandard,
+        (s) =>
+          String(s.id) === selectedStandard &&
+          (s.is_usable_in_calibration ?? true),
       );
       if (stillValid) return;
     }
@@ -489,9 +551,13 @@ export default function NewCalibrationPage() {
     }
 
     // 1. Try to match factory_standard_id registered on the instrument
+    // (solo si está certificado y vigente — no preseleccionar un patrón que
+    // el usuario no podrá usar, ISO/IEC 17025 6.4.8/6.4.9)
     if (selectedInst.factory_standard_id) {
       const factoryMatch = filteredStandards.find(
-        (s) => s.id === selectedInst.factory_standard_id,
+        (s) =>
+          s.id === selectedInst.factory_standard_id &&
+          (s.is_usable_in_calibration ?? true),
       );
       if (factoryMatch) {
         setSelectedStandard(String(factoryMatch.id));
@@ -609,6 +675,11 @@ export default function NewCalibrationPage() {
     recoveryRawPayloadRef.current = null; // consume — only rebuild once
     const recovered = rebuildGridData(rawPayload, grids);
     if (Object.keys(recovered).length > 0) setGridDataMap(recovered);
+
+    const notApplicable = rawPayload.not_applicable_functions;
+    if (Array.isArray(notApplicable) && notApplicable.length > 0) {
+      setNotApplicableGrids(new Set(notApplicable.map((f) => `grid_${f}`)));
+    }
   }, [gridRecoveryTrigger, grids]);
 
   // ─── Grid data handler ───
@@ -632,6 +703,11 @@ export default function NewCalibrationPage() {
 
     // Add grid data in the format the backend expects
     for (const grid of grids) {
+      if (notApplicableGrids.has(grid.id)) {
+        payload[grid.id] = [];
+        continue;
+      }
+
       const gridData = gridDataMap[grid.id] || {};
       const rows = Object.keys(gridData)
         .map(Number)
@@ -695,6 +771,8 @@ export default function NewCalibrationPage() {
                 : vals.map((v) => ({ reading: v }));
             } else if (col.editable && col.type === "number" && row[col.key]) {
               result[col.key] = parseFloat(row[col.key]) || 0;
+            } else if (col.editable && col.type === "string" && row[col.key]) {
+              result[col.key] = row[col.key];
             }
           }
           return result;
@@ -740,18 +818,36 @@ export default function NewCalibrationPage() {
       }
     }
 
+    if (notApplicableGrids.size > 0) {
+      payload.not_applicable_functions = Array.from(notApplicableGrids).map(
+        (id) => id.replace(/^grid_/, ""),
+      );
+    }
+
     return payload;
-  }, [gridDataMap, grids, selectedInst, environmentalData, procedureCode]);
+  }, [
+    gridDataMap,
+    grids,
+    selectedInst,
+    environmentalData,
+    procedureCode,
+    notApplicableGrids,
+  ]);
 
   // ─── Session creation body (shared by draft + submit) ───
   const buildSessionBody = useCallback(
     () => ({
       instrument_id: parseInt(selectedInstrument),
+      client_id: selectedClient ? parseInt(selectedClient) : null,
+      calibration_location_id: selectedLocation
+        ? parseInt(selectedLocation)
+        : null,
       procedure_schema_id: matchedSchema?.id,
       category: selectedInst?.category || "",
       ambient_temperature: parseFloat(
         environmentalData.air_temperature || "20",
       ),
+      ambient_temperature_final: tempFinal ? parseFloat(tempFinal) : null,
       ambient_temperature_uncertainty: parseFloat(tempUncertainty || "1.0"),
       ambient_humidity: parseFloat(environmentalData.humidity || "50"),
       ambient_pressure: environmentalData.ambient_pressure
@@ -766,19 +862,24 @@ export default function NewCalibrationPage() {
       ],
       calibration_date:
         calibrationDate || new Date().toISOString().split("T")[0],
+      reception_date: receptionDate || null,
       next_calibration_date: nextCalibrationDate || null,
     }),
     [
       selectedInstrument,
+      selectedClient,
+      selectedLocation,
       matchedSchema,
       selectedInst,
       environmentalData,
+      tempFinal,
       tempUncertainty,
       technicianObservation,
       selectedStandard,
       procedureCode,
       selectedStandard2,
       calibrationDate,
+      receptionDate,
       nextCalibrationDate,
     ],
   );
@@ -921,6 +1022,11 @@ export default function NewCalibrationPage() {
     const newErrors: Record<string, Set<string>> = {};
     let hasErrors = false;
     for (const grid of grids) {
+      if (notApplicableGrids.has(grid.id)) {
+        newErrors[grid.id] = new Set();
+        continue;
+      }
+
       const gridData = gridDataMap[grid.id] || {};
       const rows = Object.keys(gridData);
       if (rows.length === 0) {
@@ -954,6 +1060,7 @@ export default function NewCalibrationPage() {
     matchedSchema,
     grids,
     gridDataMap,
+    notApplicableGrids,
     nextCalibrationDate,
     procedureCode,
     selectedStandard2,
@@ -1294,11 +1401,20 @@ export default function NewCalibrationPage() {
                     ? `— Patrones de ${selectedInst.category} —`
                     : "— Seleccione Instrumento primero —"}
                 </option>
-                {filteredStandards.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.internal_code} — {s.name}
-                  </option>
-                ))}
+                {filteredStandards.map((s) => {
+                  const usable = s.is_usable_in_calibration ?? true;
+                  const reason = !s.is_certified
+                    ? " — SIN CERTIFICAR, no disponible"
+                    : s.is_expired
+                      ? " — VENCIDO, no disponible"
+                      : "";
+                  return (
+                    <option key={s.id} value={s.id} disabled={!usable}>
+                      {s.internal_code} — {s.name}
+                      {reason}
+                    </option>
+                  );
+                })}
               </select>
 
               {/* ── No factory standard affiliated warning ───── */}
@@ -1537,6 +1653,52 @@ export default function NewCalibrationPage() {
             </div>
           )}
 
+          {/* No procedure schema matches the instrument's category */}
+          {!loadingSchema && noSchemaForCategory && (
+            <div
+              className="mt-4 p-4 rounded-md flex items-start gap-2"
+              style={{
+                backgroundColor: "var(--bg-app)",
+                border: "1px solid var(--color-error, #dc2626)",
+              }}
+            >
+              <AlertTriangle
+                size={14}
+                className="mt-0.5 shrink-0"
+                style={{ color: "var(--color-error, #dc2626)" }}
+              />
+              <span className="text-[11px]" style={{ color: "var(--text-main)" }}>
+                No hay un procedimiento de calibración activo configurado para
+                la categoría &quot;{selectedInst?.category}&quot; de este
+                instrumento. Verifica que exista un{" "}
+                <code>ProcedureSchema</code> con esa categoría y que esté
+                activo, o revisa que la categoría del instrumento coincida con
+                la del procedimiento.
+              </span>
+            </div>
+          )}
+
+          {/* Schema matched by category but the fetch itself failed (e.g. inactive schema, 404, 500) */}
+          {!loadingSchema && !noSchemaForCategory && schemaLoadError && (
+            <div
+              className="mt-4 p-4 rounded-md flex items-start gap-2"
+              style={{
+                backgroundColor: "var(--bg-app)",
+                border: "1px solid var(--color-error, #dc2626)",
+              }}
+            >
+              <AlertTriangle
+                size={14}
+                className="mt-0.5 shrink-0"
+                style={{ color: "var(--color-error, #dc2626)" }}
+              />
+              <span className="text-[11px]" style={{ color: "var(--text-main)" }}>
+                No se pudo cargar el procedimiento &quot;{baseSchemaCode}&quot;.
+                Verifica que exista y esté activo en el sistema.
+              </span>
+            </div>
+          )}
+
           {/* Dynamic Metadata Requirements */}
           <AnimatePresence>
             {matchedSchema && selectedInstrument && !loadingSchema && (
@@ -1762,6 +1924,125 @@ export default function NewCalibrationPage() {
                   )}
                 </div>
 
+                {/* ── Datos del Cliente y Orden de Trabajo (ISO 7.8.2.e) ──── */}
+                <div
+                  className="mt-4 p-4 rounded-md"
+                  style={{
+                    backgroundColor: "var(--bg-app)",
+                    border: "1px solid var(--border-color)",
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h4
+                      className="text-[12px] font-semibold flex items-center gap-1.5"
+                      style={{ color: "var(--text-main)" }}
+                    >
+                      <Info size={13} style={{ color: COLORS.primary }} />
+                      Datos del Cliente
+                    </h4>
+                    <span
+                      className="text-[9px] px-2 py-0.5 rounded font-mono"
+                      style={{
+                        backgroundColor: "var(--border-color)",
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      ISO 7.8.2.e
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label
+                        className="text-[10px] font-medium uppercase tracking-wider"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        Cliente / Empresa
+                      </label>
+                      <div className="flex gap-2">
+                        <select
+                          value={selectedClient}
+                          onChange={(e) => setSelectedClient(e.target.value)}
+                          className="w-full h-8 px-2.5 rounded input-theme text-xs"
+                        >
+                          <option value="">— Sin cliente asociado —</option>
+                          {clients.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.company_name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddClient(true)}
+                          className="h-8 px-2.5 rounded text-[10px] font-semibold whitespace-nowrap"
+                          style={{
+                            border: "1px solid var(--border-color)",
+                            color: "var(--text-muted)",
+                          }}
+                        >
+                          + Nuevo
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label
+                        className="text-[10px] font-medium uppercase tracking-wider"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        Lugar de Calibraci&oacute;n
+                      </label>
+                      <div className="flex gap-2">
+                        <select
+                          value={selectedLocation}
+                          onChange={(e) => setSelectedLocation(e.target.value)}
+                          className="w-full h-8 px-2.5 rounded input-theme text-xs"
+                        >
+                          <option value="">— Seleccionar lugar —</option>
+                          {calibrationLocations.map((l) => (
+                            <option key={l.id} value={l.id}>
+                              {l.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddLocation(true)}
+                          className="h-8 px-2.5 rounded text-[10px] font-semibold whitespace-nowrap"
+                          style={{
+                            border: "1px solid var(--border-color)",
+                            color: "var(--text-muted)",
+                          }}
+                        >
+                          + Nuevo
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p
+                    className="mt-3 text-[10px] italic"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    El N&deg; de Solicitud / OT se asigna autom&aacute;ticamente
+                    al guardar la sesi&oacute;n.
+                  </p>
+                </div>
+
+                {showAddClient && (
+                  <AddClientModal
+                    onClose={() => setShowAddClient(false)}
+                    onCreated={handleClientCreated}
+                  />
+                )}
+
+                {showAddLocation && (
+                  <AddCalibrationLocationModal
+                    onClose={() => setShowAddLocation(false)}
+                    onCreated={handleLocationCreated}
+                  />
+                )}
+
                 {/* ── Static Certificate Fields (ISO 7.8.4) ──────────────── */}
                 <div
                   id="tour-cal-dates"
@@ -1788,6 +2069,62 @@ export default function NewCalibrationPage() {
                     </span>
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Reception date */}
+                    <div className="space-y-1">
+                      <label
+                        className="text-[10px] font-medium uppercase tracking-wider"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        Fecha de Recepci&oacute;n
+                      </label>
+                      <input
+                        type="date"
+                        value={receptionDate}
+                        onChange={(e) => setReceptionDate(e.target.value)}
+                        className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono"
+                      />
+                      <span
+                        className="text-[9px]"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        Fecha en que se recibi&oacute; el instrumento
+                      </span>
+                    </div>
+
+                    {/* Final temperature */}
+                    <div className="space-y-1">
+                      <label
+                        className="text-[10px] font-medium uppercase tracking-wider"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        Temperatura Final{" "}
+                        <span style={{ color: "var(--text-muted)" }}>
+                          (&deg;C)
+                        </span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder={
+                            environmentalData.air_temperature || "20"
+                          }
+                          value={tempFinal}
+                          onChange={(e) => setTempFinal(e.target.value)}
+                          className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono pr-10"
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-medium opacity-40">
+                          °C
+                        </span>
+                      </div>
+                      <span
+                        className="text-[9px]"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        Temperatura ambiental al finalizar
+                      </span>
+                    </div>
+
                     {/* Temperature uncertainty */}
                     <div className="space-y-1">
                       <label
@@ -2076,6 +2413,8 @@ export default function NewCalibrationPage() {
                       data={gridDataMap[grid.id] || {}}
                       onChange={handleGridChange}
                       validationErrors={validationErrors[grid.id]}
+                      notApplicable={notApplicableGrids.has(grid.id)}
+                      onToggleNotApplicable={toggleNotApplicable}
                       instrumentInfo={
                         selectedInst
                           ? {

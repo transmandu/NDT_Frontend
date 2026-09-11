@@ -20,6 +20,12 @@ interface DynamicGridProps {
     range_min: number | null;
     range_max: number | null;
   };
+  /** Grid completa marcada como "No aplica" (ej. el vernier no tiene sonda de
+   * profundidad, o esa función no se calibró en esta sesión). Cuando está
+   * activa, no se exige llenar la tabla y se documenta explícitamente en el
+   * resultado en vez de omitirla en silencio. */
+  notApplicable?: boolean;
+  onToggleNotApplicable?: (gridId: string) => void;
 }
 
 const ORANGE = "#FFA526";
@@ -1391,6 +1397,8 @@ export default React.memo(function DynamicGrid({
   data,
   onChange,
   validationErrors,
+  notApplicable,
+  onToggleNotApplicable,
 }: DynamicGridProps) {
   if (!grid?.columns) return null;
 
@@ -1434,9 +1442,35 @@ export default React.memo(function DynamicGrid({
             Puntos × Repeticiones
           </span>
         )}
+        {onToggleNotApplicable && (
+          <label
+            className="flex items-center gap-1.5 text-[10px] shrink-0 mt-0.5 cursor-pointer select-none whitespace-nowrap"
+            style={{ color: "var(--text-muted)" }}
+          >
+            <input
+              type="checkbox"
+              checked={!!notApplicable}
+              onChange={() => onToggleNotApplicable(grid.id)}
+            />
+            No aplica
+          </label>
+        )}
       </div>
 
-      {isTransposed ? (
+      {notApplicable ? (
+        <div
+          className="text-[10px] px-3 py-2 rounded-md"
+          style={{
+            backgroundColor: "var(--bg-app)",
+            border: "1px dashed var(--border-color)",
+            color: "var(--text-muted)",
+          }}
+        >
+          Marcado como &quot;No aplica&quot; — el instrumento no tiene esta
+          función, o no se calibró en esta sesión. Esto queda registrado
+          explícitamente en el resultado.
+        </div>
+      ) : isTransposed ? (
         <TransposedMatrix
           grid={grid}
           data={data}
@@ -1460,20 +1494,22 @@ export default React.memo(function DynamicGrid({
         />
       )}
 
-      <div className="flex items-center justify-between mt-2">
-        <span
-          className="text-[9px] font-mono"
-          style={{ color: "var(--text-muted)" }}
-        >
-          {grid.type} · {Object.keys(data).length} punto
-          {Object.keys(data).length !== 1 ? "s" : ""}
-        </span>
-        {settings?.min_iterations && settings?.max_iterations && (
-          <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>
-            Reps: {settings.min_iterations}–{settings.max_iterations}
+      {!notApplicable && (
+        <div className="flex items-center justify-between mt-2">
+          <span
+            className="text-[9px] font-mono"
+            style={{ color: "var(--text-muted)" }}
+          >
+            {grid.type} · {Object.keys(data).length} punto
+            {Object.keys(data).length !== 1 ? "s" : ""}
           </span>
-        )}
-      </div>
+          {settings?.min_iterations && settings?.max_iterations && (
+            <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>
+              Reps: {settings.min_iterations}–{settings.max_iterations}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 });

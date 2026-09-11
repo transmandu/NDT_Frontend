@@ -855,9 +855,6 @@ function InstrumentModal({
         backgroundColor: "rgba(0,0,0,0.55)",
         backdropFilter: "blur(4px)",
       }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -984,7 +981,10 @@ function InstrumentModal({
                       <div className="relative">
                         <input
                           {...register("internal_code")}
+                          readOnly={isEdit}
                           className="field-input font-mono"
+                          style={isEdit ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
+                          title={isEdit ? "El código interno no se puede modificar una vez creado" : undefined}
                         />
                         {!isEdit && (
                           <span
