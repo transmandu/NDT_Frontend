@@ -301,21 +301,43 @@ export interface StandardSnapshot {
   calibrated_by_lab?: string | null;
 }
 
+export interface Client {
+  id: number;
+  company_name: string;
+  tax_id: string | null;
+  address: string | null;
+  contact_name: string | null;
+  phone_1: string | null;
+  phone_2: string | null;
+  email: string | null;
+  is_active: boolean;
+}
+
+export interface CalibrationLocation {
+  id: number;
+  name: string;
+  address: string | null;
+  is_active: boolean;
+}
+
 export interface Standard {
   id: number;
   internal_code: string;
   name: string;
   brand: string | null;
   model: string | null;
+  material: string | null;
+  grade: number | null; // Grado de exactitud ISO 3650 del bloque patrón: 0-3
   serial_number: string | null;
   resolution: number | null;
   unit: string | null;
   category: string;
-  certificate_number: string;
+  certificate_number: string | null;
+  is_certified: boolean; // false = registrado sin certificado de calibración propio
   uncertainty_u: number;
   k_factor: number;
   calibration_date: string | null;
-  expiry_date: string;
+  expiry_date: string | null;
   calibrated_by_lab: string | null;
   traceability_chain: TraceabilityEntry[] | null;
   /* Category-specific metrological fields */
@@ -323,6 +345,8 @@ export interface Standard {
   oiml_class: string | null;           // Mass: E1, E2, F1, F2, M1…
   mass_density: number | null;         // Mass: kg/m³ for air buoyancy
   uncertainty_slope: number | null;    // Dimensional: b in U=a+b·L
+  is_expired?: boolean | null;
+  is_usable_in_calibration?: boolean;
   created_at?: string;
   updated_at?: string;
   /**
