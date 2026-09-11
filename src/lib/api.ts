@@ -65,18 +65,19 @@ api.interceptors.response.use(
       // Texto plano (no HTML)
       userMessage = data;
     } else if (data && typeof data === 'object') {
-      // JSON estándar de Laravel: { message: "..." } o { error: "..." } o { errors: {...} }
-      if (data.message) {
-        userMessage = data.message;
-      } else if (data.error) {
-        userMessage = data.error;
-      } else if (data.errors) {
-        // Errores de validación: tomar el primer mensaje de cada campo
+      // JSON estándar de Laravel: { errors: {...} } (422) o { message: "..." } o { error: "..." }
+      // `errors` va primero: en un 422 el `message` es el genérico "The given data
+      // was invalid.", que no le dice al usuario cuál campo falló ni por qué.
+      if (data.errors) {
         const firstErrors = Object.values(data.errors as Record<string, string[]>)
           .flat()
           .slice(0, 2)
           .join(' | ');
         userMessage = firstErrors || 'Error de validación.';
+      } else if (data.message) {
+        userMessage = data.message;
+      } else if (data.error) {
+        userMessage = data.error;
       }
     } else if (!error.response) {
       // Sin respuesta: timeout, red caída, CORS preflight rechazado
