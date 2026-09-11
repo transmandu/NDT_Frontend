@@ -14,6 +14,7 @@ import { isAxiosError } from 'axios';
 import { DataTable } from '@/components/ui/data-table';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { User } from '@/types/calibration';
+import { ROLE_LABELS } from '@/lib/roleLabels';
 
 import { C } from '@/lib/colors';
 const ACCENT = C.accent;
@@ -22,13 +23,6 @@ const ROLE_COLORS: Record<string, string> = {
   auditor:    C.roleAuditor,
   technician: C.roleTechnician,
   supervisor: C.roleSupervisor,
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  admin:    'Administrador',
-  auditor:  'Auditor',
-  technician: 'Técnico',
-  supervisor: 'Supervisor',
 };
 
 /* ─── Zod Schema ─────────────────────────────────────────── */
@@ -246,8 +240,7 @@ function DeleteConfirmModal({ user, onClose, onConfirm, deleting }: {
   const modal = (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
       <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }} transition={{ duration: 0.18 }}
         className="w-full max-w-sm rounded-xl shadow-2xl overflow-hidden"
@@ -317,8 +310,7 @@ function UserModal({ user, onClose, onSave, saving }: {
   const modal = (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
       <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }} transition={{ duration: 0.18 }}
         className="w-full max-w-md rounded-xl shadow-2xl overflow-hidden"
@@ -359,10 +351,10 @@ function UserModal({ user, onClose, onSave, saving }: {
             <div className="space-y-1.5">
               <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Rol *</label>
               <select {...register('role')} className="field-input w-full">
-                <option value="technician">Técnico — registra calibraciones</option>
-                <option value="auditor">Auditor — aprueba / rechaza</option>
-                <option value="supervisor">Supervisor — supervisa operaciones</option>
-                <option value="admin">Administrador — acceso total</option>
+                <option value="technician">{ROLE_LABELS.technician} — registra calibraciones</option>
+                <option value="auditor">{ROLE_LABELS.auditor} — aprueba / rechaza</option>
+                <option value="supervisor">{ROLE_LABELS.supervisor} — supervisa operaciones</option>
+                <option value="admin">{ROLE_LABELS.admin} — acceso total</option>
               </select>
               {errors.role && <p className="text-[10px] text-red-400">{errors.role.message}</p>}
             </div>

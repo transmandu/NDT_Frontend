@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { Search } from "lucide-react";
+import { ROLE_LABELS } from "@/lib/roleLabels";
 
 interface AuditLogEntry {
   id?: number;
@@ -104,12 +105,7 @@ const FIELD_VALUES: Record<string, Record<string, string>> = {
     approved: "Aprobada",
     rejected: "Rechazada",
   },
-  role: {
-    admin: "Administrador",
-    technician: "Técnico",
-    supervisor: "Supervisor",
-    auditor: "Auditor",
-  },
+  role: ROLE_LABELS,
   is_active: {
     "1": "Activo",
     "0": "Inactivo",

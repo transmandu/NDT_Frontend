@@ -1,12 +1,13 @@
 "use client";
 
 import type { LibraryRole } from "@/types/library";
+import { ROLE_LABELS } from "@/lib/roleLabels";
 
 const ALL_ROLES: { value: LibraryRole; label: string }[] = [
-  { value: "technician", label: "Técnico" },
-  { value: "supervisor", label: "Supervisor" },
-  { value: "auditor", label: "Auditor" },
-  { value: "admin", label: "Admin" },
+  { value: "technician", label: ROLE_LABELS.technician },
+  { value: "supervisor", label: ROLE_LABELS.supervisor },
+  { value: "auditor", label: ROLE_LABELS.auditor },
+  { value: "admin", label: ROLE_LABELS.admin },
 ];
 
 /**
