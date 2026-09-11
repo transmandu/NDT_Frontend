@@ -5,9 +5,51 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
 import api from "@/lib/api";
 import { isAxiosError } from "axios";
-import { motion } from "framer-motion";
-import { C } from "@/lib/colors";
-import { Eye, EyeOff, ShieldCheck, Sun, Moon } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import Image from "next/image";
+import { Eye, EyeOff, ShieldCheck } from "lucide-react";
+
+const INK_BG = "#040b16";
+const INK_PANEL = "#0b1426";
+const INK_BORDER = "#1e293b";
+const INK_MUTED = "#8593a8";
+
+/**
+ * Instrumento de calibración — la aguja parte desviada y se asienta en el
+ * rango nominal al cargar la pantalla, como un patrón encendiéndose.
+ */
+function CalibrationGauge({ reduceMotion }: { reduceMotion: boolean }) {
+  return (
+    <svg width="56" height="40" viewBox="0 0 120 76" fill="none" aria-hidden="true">
+      <path
+        d="M8,68 A52,52 0 0 1 112,68 Z"
+        fill={INK_PANEL}
+        stroke={INK_BORDER}
+        strokeWidth={2}
+      />
+      <motion.g
+        style={{ transformOrigin: "60px 68px" }}
+        initial={{ rotate: reduceMotion ? -18 : -58 }}
+        animate={{ rotate: -18 }}
+        transition={
+          reduceMotion
+            ? { duration: 0 }
+            : { type: "spring", stiffness: 60, damping: 8, delay: 0.5 }
+        }
+      >
+        <line x1={60} y1={68} x2={60} y2={26} stroke="#f8fafc" strokeWidth={3} strokeLinecap="round" />
+      </motion.g>
+      <circle cx={60} cy={68} r={4.5} fill="#f8fafc" />
+      <circle
+        cx={26}
+        cy={70}
+        r={6}
+        fill="var(--brand-accent2)"
+        style={{ filter: "drop-shadow(0 0 5px rgba(255,112,19,0.75))" }}
+      />
+    </svg>
+  );
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -15,30 +57,14 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isDark, setIsDark] = useState(false);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const setAuth = useAuthStore((s) => s.setAuth);
   const router = useRouter();
+  const reduceMotion = useReducedMotion() ?? false;
 
   useEffect(() => {
     if (isAuthenticated) router.replace("/dashboard");
   }, [isAuthenticated, router]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("theme-mode");
-    const dark = saved === "dark";
-    setIsDark(dark);
-    document.body.classList.remove("theme-light", "theme-dark");
-    document.body.classList.add(dark ? "theme-dark" : "theme-light");
-  }, []);
-
-  const toggleTheme = () => {
-    const next = !isDark;
-    setIsDark(next);
-    document.body.classList.remove("theme-light", "theme-dark");
-    document.body.classList.add(next ? "theme-dark" : "theme-light");
-    localStorage.setItem("theme-mode", next ? "dark" : "light");
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,145 +86,234 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-4 relative"
-      style={{ backgroundColor: "var(--bg-app)" }}
+      className="relative min-h-screen overflow-hidden flex items-center justify-center px-4 py-14 sm:py-20"
+      style={{ backgroundColor: INK_BG }}
     >
-      {/* Dark mode toggle */}
-      <button
-        onClick={toggleTheme}
-        className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+      {/* Blueprint grid */}
+      <div
+        className="pointer-events-none absolute inset-0"
         style={{
-          backgroundColor: "var(--bg-panel)",
-          border: "1px solid var(--border-color)",
-          color: "var(--text-muted)",
+          backgroundImage:
+            "linear-gradient(rgba(148,163,184,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.08) 1px, transparent 1px)",
+          backgroundSize: "42px 42px",
+          maskImage:
+            "radial-gradient(ellipse 85% 65% at 25% 20%, black 35%, transparent 85%)",
+          WebkitMaskImage:
+            "radial-gradient(ellipse 85% 65% at 25% 20%, black 35%, transparent 85%)",
         }}
-        title={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-      >
-        {isDark ? <Sun size={15} /> : <Moon size={15} />}
-      </button>
+      />
+      {/* Ambient glow */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 55% 45% at 18% 12%, rgba(255,112,19,0.12), transparent 60%), radial-gradient(ellipse 60% 55% at 100% 100%, rgba(99,102,241,0.10), transparent 60%)",
+        }}
+      />
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="w-full max-w-sm"
-      >
-        {/* Brand */}
-        <div className="text-center mb-8">
-          <div
-            className="inline-flex items-center justify-center w-14 h-14 rounded-xl font-bold text-white text-xl shadow-lg mx-auto mb-4"
-            style={{ backgroundColor: "#FFA526" }}
-          >
-            OQC
-          </div>
-          <h1
-            className="text-xl font-bold tracking-tight"
-            style={{ color: "#FF4712" }}
-          >
-            Orinoco Quality &amp; Control
-          </h1>
-          <p
-            className="text-[10px] uppercase tracking-widest font-semibold mt-1"
-            style={{ color: "var(--text-muted)" }}
-          >
-            Lab NDT · ISO/IEC 17025
-          </p>
-        </div>
-
-        {/* Login Card */}
-        <div className="panel rounded-lg shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <ShieldCheck size={18} style={{ color: "#FFA526" }} />
-            <h2
-              className="text-sm font-bold tracking-tight"
-              style={{ color: "var(--text-main)" }}
+      <div className="relative z-10 w-full max-w-295 grid grid-cols-1 lg:grid-cols-2 gap-14 lg:gap-20 items-center">
+        {/* ── Tesis: qué es este laboratorio ── */}
+        <motion.div
+          initial={{ opacity: 0, y: reduceMotion ? 0 : 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="text-center lg:text-left"
+        >
+          <div className="flex items-center justify-center lg:justify-start gap-3 mb-10">
+            <div
+              className="relative w-17 h-17 rounded-full overflow-hidden shrink-0"
+              style={{ border: `1px solid ${INK_BORDER}`, backgroundColor: INK_PANEL }}
             >
-              Acceso al Sistema
-            </h2>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label
-                className="text-[11px] font-medium uppercase tracking-wider"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Correo electrónico
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full h-9 px-3 rounded input-theme text-xs"
-                placeholder="usuario@orinocoquality.com"
+              <Image
+                src="/logo.jpg"
+                alt="Orinoco Quality & Control"
+                fill
+                sizes="60px"
+                quality={100}
+                className="object-contain scale-[1.05]"
+                priority
               />
             </div>
-
-            <div className="space-y-1.5">
-              <label
-                className="text-[11px] font-medium uppercase tracking-wider"
-                style={{ color: "var(--text-muted)" }}
+            <div className="text-left">
+              <p className="text-base font-bold tracking-tight" style={{ color: "var(--brand-accent2)" }}>
+                Orinoco Quality &amp; Control
+              </p>
+              <p
+                className="text-[11px] uppercase tracking-[0.18em] font-semibold"
+                style={{ color: INK_MUTED }}
               >
-                Contraseña
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="w-full h-9 px-3 pr-9 rounded input-theme text-xs"
-                  placeholder="••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
-              </div>
+                Lab NDT · ISO/IEC 17025
+              </p>
             </div>
+          </div>
 
-            {error && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-[11px] text-center py-2 px-3 rounded font-medium"
-                style={{
-                  backgroundColor: "rgba(255,30,18,0.1)",
-                  color: "#FF1E12",
-                  border: "1px solid rgba(255,30,18,0.2)",
-                }}
-              >
-                {error}
-              </motion.div>
-            )}
-
-            <motion.button
-              type="submit"
-              disabled={loading}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-              className="w-full h-9 rounded text-xs font-semibold text-white shadow-md transition-all disabled:opacity-50"
-              style={{ backgroundColor: C.accent }}
-            >
-              {loading ? "Verificando..." : "Ingresar al Sistema"}
-            </motion.button>
-          </form>
+          <h1
+            className="font-black text-white leading-[0.98] tracking-tight mx-auto lg:mx-0"
+            style={{ fontSize: "clamp(2.25rem, 4.4vw, 3.4rem)", maxWidth: "13ch" }}
+          >
+          Acceso calibrado al laboratorio
+          </h1>
 
           <p
-            className="text-[9px] text-center mt-5 leading-relaxed"
-            style={{ color: "var(--text-muted)" }}
+            className="mt-6 text-sm sm:text-base leading-relaxed mx-auto lg:mx-0"
+            style={{ color: INK_MUTED, maxWidth: "34ch" }}
           >
-            Acceso restringido a personal autorizado.
-            <br />
-            Todas las acciones quedan registradas en la bitácora de auditoría.
+            Portal de control del laboratorio de Ensayos No Destructivos. Cada acceso queda registrado; cada hallazgo, trazable y verificable.
           </p>
-        </div>
-      </motion.div>
+
+          <div className="mt-10 flex items-center justify-center lg:justify-start gap-3">
+            <CalibrationGauge reduceMotion={reduceMotion} />
+            <div className="text-left">
+              <p
+                className="text-[11px] font-bold uppercase tracking-widest"
+                style={{ color: "var(--brand-accent2)" }}
+              >
+                Dentro de rango nominal
+              </p>
+              <p className="text-xs" style={{ color: INK_MUTED }}>
+                Tolerancia verificada · control activo
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ── Acceso ── */}
+        <motion.div
+          initial={{ opacity: 0, y: reduceMotion ? 0 : 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.08 }}
+          className="flex justify-center lg:justify-end"
+        >
+          <div
+            className="w-full max-w-sm rounded-[28px] p-8"
+            style={{
+              backgroundColor: INK_PANEL,
+              border: `1px solid ${INK_BORDER}`,
+              boxShadow: "0 30px 60px -25px rgba(0,0,0,0.65)",
+            }}
+          >
+            <h2 className="text-xl font-bold text-white">Iniciar sesión</h2>
+           
+           <div className="flex items-center mt-2">
+            <ShieldCheck className="w-4 h-4 text-brand-accent2 mr-1" />
+
+            <p className="text-sm font-semibold" style={{ color: INK_MUTED }}>
+             Acceso al sistema
+            </p>
+           </div>
+            
+
+            <form onSubmit={handleSubmit} className="mt-7 space-y-5">
+              <div className="space-y-2">
+                <label
+                  htmlFor="email"
+                  className="text-[11px] font-semibold uppercase tracking-widest"
+                  style={{ color: INK_MUTED }}
+                >
+                  Correo electronico
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="login-input w-full h-11 px-4 rounded-xl text-sm text-white"
+                  style={{ backgroundColor: INK_BG, border: `1px solid ${INK_BORDER}` }}
+                  placeholder="nombre@orinocoquality.com"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="password"
+                  className="text-[11px] font-semibold uppercase tracking-widest"
+                  style={{ color: INK_MUTED }}
+                >
+                  Contraseña
+                </label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="login-input w-full h-11 px-4 pr-11 rounded-xl text-sm text-white"
+                    style={{ backgroundColor: INK_BG, border: `1px solid ${INK_BORDER}` }}
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2"
+                    style={{ color: INK_MUTED }}
+                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  >
+                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  role="alert"
+                  className="text-[11px] text-center py-2 px-3 rounded-lg font-medium"
+                  style={{
+                    backgroundColor: "rgba(255,30,18,0.1)",
+                    color: "var(--brand-danger)",
+                    border: "1px solid rgba(255,30,18,0.2)",
+                  }}
+                >
+                  {error}
+                </motion.div>
+              )}
+
+              <motion.button
+                type="submit"
+                disabled={loading}
+                whileHover={reduceMotion ? undefined : { scale: 1.01 }}
+                whileTap={reduceMotion ? undefined : { scale: 0.99 }}
+                className="w-full h-11 rounded-xl text-sm font-bold shadow-lg transition-opacity  disabled:opacity-50 cursor-pointer"
+                style={{
+                  background:
+                    "linear-gradient(135deg, var(--brand-accent2), var(--brand-accent))",
+                  color: INK_PANEL,
+                }}
+              >
+                {loading ? "Verificando..." : "Ingresar al Sistema"}
+              </motion.button>
+            </form>
+
+            <p
+              className="text-[10px] text-center mt-6 leading-relaxed"
+              style={{ color: INK_MUTED }}
+            >
+              Acceso restringido a personal autorizado.
+              <br />
+              Todas las acciones quedan registradas en la bitácora de auditoría.
+            </p>
+          </div>
+        </motion.div>
+      </div>
+
+      <style jsx>{`
+        .login-input {
+          transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .login-input::placeholder {
+          color: #55647d;
+        }
+        .login-input:focus {
+          outline: none;
+          border-color: var(--brand-accent2);
+          box-shadow: 0 0 0 3px rgba(255, 112, 19, 0.15);
+        }
+      `}</style>
     </div>
   );
 }
