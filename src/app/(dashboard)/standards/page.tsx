@@ -95,7 +95,15 @@ const STANDARD_CATEGORIES = [
     color: "#F59E0B",
     unit: "N·m",
     description: "Transductor de torque de referencia trazable al BIPM",
-    extras: [],
+    extras: [
+      {
+        key: "drift_rate_per_year",
+        label: "Tasa de Deriva Anual",
+        type: "number",
+        hint: "% del valor medido, por año (null = declarar 'drift_pct' al calibrar)",
+        placeholder: "---",
+      },
+    ],
   },
   {
     category: "pressure",
@@ -105,7 +113,15 @@ const STANDARD_CATEGORIES = [
     color: "#EF4444",
     unit: "bar",
     description: "Transductor de presión patrón de alta exactitud",
-    extras: [],
+    extras: [
+      {
+        key: "drift_rate_per_year",
+        label: "Tasa de Deriva Anual",
+        type: "number",
+        hint: "bar/año observado (mismas unidades que U del patrón)",
+        placeholder: "---",
+      },
+    ],
   },
   {
     category: "electrical",
@@ -115,7 +131,15 @@ const STANDARD_CATEGORIES = [
     color: "#8B5CF6",
     unit: "V",
     description: "Calibrador multiparámetro de señales eléctricas",
-    extras: [],
+    extras: [
+      {
+        key: "drift_rate_per_year",
+        label: "Tasa de Deriva Anual",
+        type: "number",
+        hint: "V/año observado (mismas unidades que U del patrón)",
+        placeholder: "---",
+      },
+    ],
   },
   {
     category: "temperature",
@@ -125,7 +149,15 @@ const STANDARD_CATEGORIES = [
     color: "#06B6D4",
     unit: "°C",
     description: "Termómetro/termohigrómetro de referencia trazable",
-    extras: [],
+    extras: [
+      {
+        key: "drift_rate_per_year",
+        label: "Tasa de Deriva Anual",
+        type: "number",
+        hint: "°C/año (o %HR/año) observado — mismas unidades que U del patrón",
+        placeholder: "---",
+      },
+    ],
   },
 ] as const;
 type StdCat = (typeof STANDARD_CATEGORIES)[number];
@@ -146,6 +178,22 @@ const CATEGORY_NORMALIZE: Record<string, string> = {
   temperature: "temperature",
 };
 
+/**
+ * Valores de referencia orientativos por grado de exactitud (bloques patrón
+ * dimensionales). Son un punto de partida razonable para U = a + b·L —
+ * SIEMPRE deben ajustarse con los valores reales del certificado del bloque.
+ * Grado 1 replica el valor ya validado en el sistema (ISO 3650 Grado 1).
+ */
+const DIMENSIONAL_GRADE_DEFAULTS: Record<
+  string,
+  { uncertainty_u: number; uncertainty_slope: number; drift_rate_per_year: number }
+> = {
+  "0": { uncertainty_u: 0.05, uncertainty_slope: 0.5e-6, drift_rate_per_year: 0.25 },
+  "1": { uncertainty_u: 0.1, uncertainty_slope: 1e-6, drift_rate_per_year: 0.5 },
+  "2": { uncertainty_u: 0.2, uncertainty_slope: 2e-6, drift_rate_per_year: 1.0 },
+  "3": { uncertainty_u: 0.4, uncertainty_slope: 4e-6, drift_rate_per_year: 2.0 },
+};
+
 function findCategoryByKey(key: string | null): StdCat | null {
   if (!key) return null;
   const normalized = CATEGORY_NORMALIZE[key.toLowerCase()] ?? key.toLowerCase();
@@ -158,21 +206,64 @@ const standardSchema = z.object({
   name: z.string().min(1, "Nombre requerido"),
   brand: z.string().nullable().optional(),
   model: z.string().nullable().optional(),
+  material: z.string().nullable().optional(),
+  grade: z.string().nullable().optional(),
   serial_number: z.string().nullable().optional(),
   resolution: z.coerce.number().nullable().optional(),
   unit: z.string().nullable().optional(),
   category: z.string().min(1, "Categoría requerida"),
-  certificate_number: z.string().min(1, "N° certificado requerido"),
+  is_certified: z.boolean().optional(),
+  certificate_number: z.string().nullable().optional(),
   uncertainty_u: z.coerce.number().positive("Debe ser > 0"),
   k_factor: z.coerce.number().positive("Debe ser > 0"),
   calibration_date: z.string().nullable().optional(),
-  expiry_date: z.string().min(1, "Vencimiento requerido"),
+  expiry_date: z.string().nullable().optional(),
   calibrated_by_lab: z.string().nullable().optional(),
   /* Category extras */
   uncertainty_slope: z.coerce.number().nullable().optional(),
   oiml_class: z.string().nullable().optional(),
   drift_rate_per_year: z.coerce.number().nullable().optional(),
   mass_density: z.coerce.number().nullable().optional(),
+}).superRefine((val, ctx) => {
+  // El certificado y la vigencia solo son obligatorios si el patrón está
+  // certificado (ver checkbox "Sin certificar" — ISO/IEC 17025 6.4.8/6.4.9:
+  // un patrón sin certificado puede registrarse, pero no usarse en
+  // calibraciones formales hasta tenerlo).
+  if (val.is_certified !== false) {
+    if (!val.certificate_number || val.certificate_number.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["certificate_number"],
+        message: "N° certificado requerido",
+      });
+    }
+    if (!val.expiry_date || val.expiry_date.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["expiry_date"],
+        message: "Vencimiento requerido",
+      });
+    }
+  }
+  if (val.category !== "dimensional" || val.uncertainty_slope == null || val.uncertainty_slope === 0) return;
+  const base = val.uncertainty_u;
+  const slope = val.uncertainty_slope;
+  if (base <= 0) return;
+  if (slope < 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["uncertainty_slope"],
+      message: "La pendiente (b) no puede ser negativa",
+    });
+    return;
+  }
+  if (base < 0.001) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["uncertainty_u"],
+      message: "La incertidumbre base (a) debe ser > 0.001 µm",
+    });
+  }
 });
 type StandardForm = z.infer<typeof standardSchema>;
 
@@ -187,7 +278,9 @@ type StandardExtra = {
 };
 
 /* ─── Status helper ──────────────────────────────────────── */
-function getStatus(expiry: string) {
+function getStatus(expiry: string | null, isCertified = true) {
+  if (!isCertified || !expiry)
+    return { label: "Sin Certificar", color: "#94A3B8", icon: AlertTriangle };
   const days = Math.ceil((new Date(expiry).getTime() - Date.now()) / 86400000);
   if (days < 0)
     return { label: "Vencido", color: COLORS.danger, icon: AlertCircle };
@@ -385,18 +478,23 @@ function buildColumns(
       header: "Vencimiento",
       meta: { tourId: "tour-std-col-expiry" },
       enableColumnFilter: false,
-      cell: ({ getValue }) => (
-        <span
-          className="text-[10px] whitespace-nowrap"
-          style={{ color: "var(--text-muted)" }}
-        >
-          {new Date(getValue<string>()).toLocaleDateString("es", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-          })}
-        </span>
-      ),
+      cell: ({ getValue }) => {
+        const v = getValue<string | null>();
+        return (
+          <span
+            className="text-[10px] whitespace-nowrap"
+            style={{ color: "var(--text-muted)" }}
+          >
+            {v
+              ? new Date(v).toLocaleDateString("es", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })
+              : "—"}
+          </span>
+        );
+      },
     },
     {
       id: "status",
@@ -404,14 +502,9 @@ function buildColumns(
       meta: { tourId: "tour-std-col-kfactor" },
       enableColumnFilter: true,
       enableSorting: false,
-      accessorFn: (row) => {
-        const d = Math.ceil(
-          (new Date(row.expiry_date).getTime() - Date.now()) / 86400000,
-        );
-        return d < 0 ? "Vencido" : d < 90 ? "Por Vencer" : "Vigente";
-      },
+      accessorFn: (row) => getStatus(row.expiry_date, row.is_certified).label,
       cell: ({ row }) => {
-        const s = getStatus(row.original.expiry_date);
+        const s = getStatus(row.original.expiry_date, row.original.is_certified);
         return (
           <span
             className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider whitespace-nowrap"
@@ -587,6 +680,7 @@ function StandardModal({
     register,
     handleSubmit,
     setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<StandardForm>({
     resolver: zodResolver(standardSchema) as Resolver<StandardForm>,
@@ -596,11 +690,14 @@ function StandardModal({
           name: standard.name,
           brand: standard.brand ?? "",
           model: standard.model ?? "",
+          material: standard.material ?? "",
+          grade: standard.grade != null ? String(standard.grade) : "",
           serial_number: standard.serial_number ?? "",
           resolution: standard.resolution ?? undefined,
           unit: standard.unit ?? "",
           category: standard.category,
-          certificate_number: standard.certificate_number,
+          is_certified: standard.is_certified ?? true,
+          certificate_number: standard.certificate_number ?? "",
           uncertainty_u: standard.uncertainty_u,
           k_factor: standard.k_factor,
           calibration_date: standard.calibration_date?.split("T")[0] ?? "",
@@ -611,8 +708,18 @@ function StandardModal({
           drift_rate_per_year: standard.drift_rate_per_year ?? undefined,
           mass_density: standard.mass_density ?? undefined,
         }
-      : { k_factor: 2 },
+      : { k_factor: 2, is_certified: true },
   });
+
+  const isCertified = watch("is_certified") !== false;
+
+  const applyGradeDefaults = (grade: string) => {
+    const defaults = DIMENSIONAL_GRADE_DEFAULTS[grade];
+    if (!defaults) return;
+    setValue("uncertainty_u", defaults.uncertainty_u);
+    setValue("uncertainty_slope", defaults.uncertainty_slope);
+    setValue("drift_rate_per_year", defaults.drift_rate_per_year);
+  };
 
   useEffect(() => {
     if (selectedCat && !isEdit) {
@@ -632,7 +739,16 @@ function StandardModal({
 
   const onSubmit = async (data: StandardForm) => {
     try {
-      const payload = { ...data, traceability_chain: undefined };
+      const payload: Record<string, unknown> = {
+        ...data,
+        traceability_chain: undefined,
+        grade: data.grade ? Number(data.grade) : null,
+      };
+      if (data.is_certified === false) {
+        payload.certificate_number = null;
+        payload.calibration_date = null;
+        payload.expiry_date = null;
+      }
       if (isEdit) {
         await api.put(`/standards/${standard.id}`, payload);
         toast.success("Patrón actualizado");
@@ -656,9 +772,6 @@ function StandardModal({
       style={{
         backgroundColor: "rgba(0,0,0,0.55)",
         backdropFilter: "blur(4px)",
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
       }}
     >
       <motion.div
@@ -776,7 +889,10 @@ function StandardModal({
                       <div className="relative">
                         <input
                           {...register("internal_code")}
+                          readOnly={isEdit}
                           className="field-input font-mono"
+                          style={isEdit ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
+                          title={isEdit ? "El código interno no se puede modificar una vez creado" : undefined}
                         />
                         {!isEdit && (
                           <span
@@ -819,6 +935,13 @@ function StandardModal({
                       <input
                         {...register("model")}
                         placeholder="Número de modelo"
+                        className="field-input"
+                      />
+                    </Fld>
+                    <Fld label="Material" error={errors.material?.message}>
+                      <input
+                        {...register("material")}
+                        placeholder="Acero inoxidable, cerámica…"
                         className="field-input"
                       />
                     </Fld>
@@ -865,14 +988,25 @@ function StandardModal({
                       />
                     </Fld>
                     <Fld
-                      label="Incertidumbre U *"
+                      label={
+                        selectedCat?.category === "dimensional"
+                          ? "Incertidumbre base (a) *"
+                          : "Incertidumbre U *"
+                      }
+                      hint={
+                        selectedCat?.category === "dimensional"
+                          ? "Término a de U = a + b·L — ISO 3650. El sistema calcula U en cada longitud con la pendiente (b)."
+                          : undefined
+                      }
                       error={errors.uncertainty_u?.message}
                     >
                       <input
                         {...register("uncertainty_u")}
                         type="number"
                         step="any"
-                        placeholder="0.05"
+                        placeholder={
+                          selectedCat?.category === "dimensional" ? "0.1" : "0.05"
+                        }
                         className="field-input font-mono"
                       />
                     </Fld>
@@ -890,6 +1024,29 @@ function StandardModal({
                     </Fld>
                   </div>
                 </Sec>
+
+                {/* Grado de exactitud (solo bloques patrón dimensionales) */}
+                {selectedCat?.category === "dimensional" && (
+                  <Sec
+                    title="Grado de Exactitud"
+                    hint="ISO 3650 — al elegir el grado se sugieren valores de incertidumbre (a, b) y deriva, ajústelos según el certificado real del bloque."
+                  >
+                    <Fld label="Grado" error={errors.grade?.message}>
+                      <select
+                        {...register("grade", {
+                          onChange: (e) => applyGradeDefaults(e.target.value),
+                        })}
+                        className="field-input"
+                      >
+                        <option value="">— Seleccionar —</option>
+                        <option value="0">Grado 0</option>
+                        <option value="1">Grado 1</option>
+                        <option value="2">Grado 2</option>
+                        <option value="3">Grado 3</option>
+                      </select>
+                    </Fld>
+                  </Sec>
+                )}
 
                 {/* Extras por categoría */}
                 {selectedCat && selectedCat.extras.length > 0 && (
@@ -936,16 +1093,40 @@ function StandardModal({
 
                 {/* Certificado y vigencia */}
                 <Sec title="Certificado y Vigencia">
+                  <label
+                    className="flex items-center gap-2 mb-4 text-[11px] cursor-pointer select-none"
+                    style={{ color: "var(--text-main)" }}
+                  >
+                    <input type="checkbox" {...register("is_certified")} />
+                    Este patrón tiene certificado de calibración vigente
+                  </label>
+                  {!isCertified && (
+                    <p
+                      className="mb-4 text-[10px] px-3 py-2 rounded-md"
+                      style={{
+                        backgroundColor: "var(--bg-app)",
+                        border: "1px solid var(--border-color)",
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      Patrón sin certificar: queda registrado en el sistema pero{" "}
+                      <strong>no podrá seleccionarse en una sesión de calibración</strong>{" "}
+                      hasta cargar su certificado y fecha de vigencia (trazabilidad
+                      metrológica, ISO/IEC 17025 §6.5).
+                    </p>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Fld
-                      label="N° Certificado de Calibración *"
+                      label={`N° Certificado de Calibración ${isCertified ? "*" : ""}`}
                       error={errors.certificate_number?.message}
                       className="col-span-2"
                     >
                       <input
                         {...register("certificate_number")}
+                        disabled={!isCertified}
                         placeholder="Ej: INTI-2024-00123"
                         className="field-input font-mono"
+                        style={!isCertified ? { opacity: 0.5 } : undefined}
                       />
                     </Fld>
                     <Fld
@@ -955,17 +1136,21 @@ function StandardModal({
                       <input
                         {...register("calibration_date")}
                         type="date"
+                        disabled={!isCertified}
                         className="field-input"
+                        style={!isCertified ? { opacity: 0.5 } : undefined}
                       />
                     </Fld>
                     <Fld
-                      label="Fecha de Vencimiento *"
+                      label={`Fecha de Vencimiento ${isCertified ? "*" : ""}`}
                       error={errors.expiry_date?.message}
                     >
                       <input
                         {...register("expiry_date")}
                         type="date"
+                        disabled={!isCertified}
                         className="field-input"
+                        style={!isCertified ? { opacity: 0.5 } : undefined}
                       />
                     </Fld>
                   </div>
