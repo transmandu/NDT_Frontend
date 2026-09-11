@@ -117,7 +117,7 @@ export default async function VerifyPage({
         </Link>
       </header>
 
-      <main className="max-w-[860px] mx-auto my-6 px-4">
+      <main className="max-w-215 mx-auto my-6 px-4">
         {/* ── Verification Banner ── */}
         {isRevoked ? (
           <div className="bg-(--bg-panel) border-l-4 rounded-md py-3.5 px-4 mb-5 flex items-center gap-3 border-(--brand-danger)">
