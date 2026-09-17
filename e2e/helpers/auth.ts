@@ -20,7 +20,7 @@ export type Role = keyof typeof USERS;
 async function ensureLoggedOut(page: Page) {
   await page.goto("/login");
   try {
-    await page.getByPlaceholder("usuario@orinocoquality.com").waitFor({ state: "visible", timeout: 2000 });
+    await page.getByPlaceholder("nombre@orinocoquality.com").waitFor({ state: "visible", timeout: 2000 });
     return;
   } catch {
     // Seguía autenticado: nos redirigió a /dashboard.
@@ -33,7 +33,7 @@ async function ensureLoggedOut(page: Page) {
 export async function loginAs(page: Page, role: Role) {
   await ensureLoggedOut(page);
   const { email, password } = USERS[role];
-  await page.getByPlaceholder("usuario@orinocoquality.com").fill(email);
+  await page.getByPlaceholder("nombre@orinocoquality.com").fill(email);
   await page.getByPlaceholder("••••••••").fill(password);
   await page.getByRole("button", { name: /ingresar al sistema/i }).click();
   await page.waitForURL("**/dashboard");

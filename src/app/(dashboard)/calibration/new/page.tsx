@@ -1327,7 +1327,7 @@ export default function NewCalibrationPage() {
         </div>
         {/* Thin progress bar at the very bottom of the step bar */}
         <div
-          className="h-[2px]"
+          className="h-0.5"
           style={{ backgroundColor: "var(--border-color)" }}
         >
           <div
@@ -1342,7 +1342,7 @@ export default function NewCalibrationPage() {
       </div>
 
       {/* ── Content area with standard spacing ── */}
-      <div className="space-y-5 max-w-[1400px] mx-auto">
+      <div className="space-y-5 max-w-350 mx-auto">
         {/* ══════════════════════════════════════════════════════ */}
         {/* ═══ PASO 1: SELECCIÓN + CONDICIONES AMBIENTALES ═══  */}
         {/* ══════════════════════════════════════════════════════ */}
@@ -2697,7 +2697,7 @@ function UnifiedResultsTable({
                         style={{ borderRight: bd, color: "var(--text-main)" }}
                       >
                         <span className="block">{uASrc.source_name}</span>
-                        <span className="block text-[9px] opacity-50 font-normal font-mono truncate max-w-[240px]">
+                        <span className="block text-[9px] opacity-50 font-normal font-mono truncate max-w-60">
                           {funcLabels[funcKey] ?? funcKey} — {uASrc.note}
                         </span>
                       </td>
@@ -2744,7 +2744,7 @@ function UnifiedResultsTable({
                       <span className="block">{src.source_name}</span>
                       {src.note && (
                         <span
-                          className="block text-[9px] mt-0.5 opacity-50 font-normal font-mono truncate max-w-[240px]"
+                          className="block text-[9px] mt-0.5 opacity-50 font-normal font-mono truncate max-w-60"
                           title={src.note}
                         >
                           {src.note}
@@ -3404,7 +3404,7 @@ function VernierFunctionTable({
                       <span className="block">{src.source_name}</span>
                       {src.note && (
                         <span
-                          className="block text-[9px] mt-0.5 opacity-50 font-normal font-mono truncate max-w-[240px]"
+                          className="block text-[9px] mt-0.5 opacity-50 font-normal font-mono truncate max-w-60"
                           title={src.note}
                         >
                           {src.note}
