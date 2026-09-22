@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo, useState } from "react";
@@ -75,7 +76,7 @@ export default function QuoteCatalogPage() {
         accessorKey: "code",
         header: "Código",
         cell: ({ getValue }) => (
-          <span className="font-mono font-bold text-[11px]" style={{ color: C.primary }}>
+          <span className="font-mono font-bold text-sm" style={{ color: C.primary }}>
             {getValue<string>()}
           </span>
         ),
@@ -86,7 +87,7 @@ export default function QuoteCatalogPage() {
         enableColumnFilter: true,
         cell: ({ getValue }) => (
           <span
-            className="text-[10px] px-2 py-0.5 rounded font-medium"
+            className="text-sm px-2 py-0.5 rounded font-medium"
             style={{ backgroundColor: "var(--bg-hover)", color: "var(--text-muted)" }}
           >
             {TYPE_LABELS[getValue<string>()] ?? getValue<string>()}
@@ -97,7 +98,7 @@ export default function QuoteCatalogPage() {
         accessorKey: "description",
         header: "Descripción",
         cell: ({ getValue }) => (
-          <span className="text-[11px]" style={{ color: "var(--text-main)" }}>
+          <span className="text-xs" style={{ color: "var(--text-main)" }}>
             {getValue<string>()}
           </span>
         ),
@@ -107,7 +108,7 @@ export default function QuoteCatalogPage() {
         header: "Unidad",
         enableColumnFilter: false,
         cell: ({ getValue }) => (
-          <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+          <span className="text-sm" style={{ color: "var(--text-muted)" }}>
             {getValue<string>()}
           </span>
         ),
@@ -117,7 +118,7 @@ export default function QuoteCatalogPage() {
         header: "Precio Unit.",
         enableColumnFilter: false,
         cell: ({ getValue }) => (
-          <span className="font-mono text-[11px]" style={{ color: "var(--text-main)" }}>
+          <span className="font-mono  text-sm" style={{ color: "var(--text-main)" }}>
             ${Number(getValue<string>()).toFixed(2)}
           </span>
         ),
@@ -128,11 +129,11 @@ export default function QuoteCatalogPage() {
         enableColumnFilter: false,
         cell: ({ row }) =>
           row.original.depreciation_days ? (
-            <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+            <span className="text-sm" style={{ color: "var(--text-muted)" }}>
               {row.original.depreciation_days} días
             </span>
           ) : (
-            <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>—</span>
+            <span className="text-sm" style={{ color: "var(--text-muted)" }}>—</span>
           ),
       },
       {
@@ -140,7 +141,7 @@ export default function QuoteCatalogPage() {
         header: "% Merma",
         enableColumnFilter: false,
         cell: ({ row }) => (
-          <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+          <span className="text-sm" style={{ color: "var(--text-muted)" }}>
             {Number(row.original.default_waste_pct)}%
           </span>
         ),
@@ -151,7 +152,7 @@ export default function QuoteCatalogPage() {
         enableColumnFilter: true,
         cell: ({ getValue }) => (
           <span
-            className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider"
+            className="px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider"
             style={{
               backgroundColor: getValue<boolean>() ? `${C.success}15` : `${COLORS.danger}15`,
               color: getValue<boolean>() ? C.success : COLORS.danger,

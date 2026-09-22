@@ -40,7 +40,7 @@ export default function QuotesListPage() {
         accessorKey: "code",
         header: "Código",
         cell: ({ getValue }) => (
-          <span className="font-mono font-bold text-[11px]" style={{ color: C.primary }}>
+          <span className="font-mono font-bold text-sm" style={{ color: C.primary }}>
             {getValue<string>()}
           </span>
         ),
@@ -50,7 +50,7 @@ export default function QuotesListPage() {
         header: "Cliente",
         accessorFn: (row) => row.client?.company_name ?? "",
         cell: ({ row }) => (
-          <span className="text-[11px]" style={{ color: "var(--text-main)" }}>
+          <span className="text-sm" style={{ color: "var(--text-main)" }}>
             {row.original.client?.company_name ?? "—"}
           </span>
         ),
@@ -61,7 +61,7 @@ export default function QuotesListPage() {
         accessorFn: (row) => row.project_name ?? "",
         enableColumnFilter: false,
         cell: ({ row }) => (
-          <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+          <span className="text-sm" style={{ color: "var(--text-muted)" }}>
             {row.original.project_name ?? "—"}
           </span>
         ),
@@ -74,7 +74,7 @@ export default function QuotesListPage() {
           const s = STATUS_LABELS[getValue<QuoteStatus>()];
           return (
             <span
-              className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider whitespace-nowrap"
+              className="px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider whitespace-nowrap"
               style={{ backgroundColor: `${s.color}15`, color: s.color, border: `1px solid ${s.color}30` }}
             >
               {s.label}
@@ -87,7 +87,7 @@ export default function QuotesListPage() {
         header: "Moneda",
         enableColumnFilter: true,
         cell: ({ getValue }) => (
-          <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+          <span className="text-sm font-bold" style={{ color: "var(--text-muted)" }}>
             {CURRENCY_LABELS[getValue<string>()] ?? getValue<string>()}
           </span>
         ),
@@ -99,7 +99,7 @@ export default function QuotesListPage() {
         cell: ({ getValue }) => {
           const v = getValue<string | null>();
           return (
-            <span className="font-mono text-[11px] font-semibold" style={{ color: "var(--text-main)" }}>
+            <span className="font-mono text-sm font-semibold" style={{ color: "var(--text-main)" }}>
               {v ? `$${Number(v).toFixed(2)}` : "—"}
             </span>
           );
@@ -111,7 +111,7 @@ export default function QuotesListPage() {
         accessorFn: (row) => row.issued_at ?? "",
         enableColumnFilter: false,
         cell: ({ row }) => (
-          <span className="text-[10px] font-mono" style={{ color: "var(--text-muted)" }}>
+          <span className="text-sm font-mono" style={{ color: "var(--text-muted)" }}>
             {row.original.issued_at ? fmtDate(row.original.issued_at) : "—"}
           </span>
         ),
@@ -122,7 +122,7 @@ export default function QuotesListPage() {
         accessorFn: (row) => row.created_at ?? "",
         enableColumnFilter: false,
         cell: ({ row }) => (
-          <span className="text-[10px] font-mono" style={{ color: "var(--text-muted)" }}>
+          <span className="text-sm font-mono" style={{ color: "var(--text-muted)" }}>
             {row.original.created_at ? fmtDate(row.original.created_at) : "—"}
           </span>
         ),
@@ -134,7 +134,7 @@ export default function QuotesListPage() {
         enableColumnFilter: false,
         size: 60,
         cell: ({ row }) => (
-          <Link href={`/quotes/${row.original.id}`} className="text-[11px] font-semibold" style={{ color: C.primary }}>
+          <Link href={`/quotes/${row.original.id}`} className="text-xs font-semibold" style={{ color: C.primary }}>
             Ver →
           </Link>
         ),
@@ -172,10 +172,10 @@ export default function QuotesListPage() {
             canCreate && (
               <Link
                 href="/quotes/new"
-                className="h-7 px-3 text-[11px] rounded font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95 hover:opacity-90 whitespace-nowrap"
+                className="h-7 px-3 text-xs rounded font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95 hover:opacity-90 whitespace-nowrap"
                 style={{ backgroundColor: C.accent, color: "#fff" }}
               >
-                <Plus size={13} /> Nueva Cotización
+                <Plus size={15} /> Nueva Cotización
               </Link>
             )
           }
