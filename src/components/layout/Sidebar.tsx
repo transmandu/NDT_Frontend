@@ -23,6 +23,12 @@ import {
   ShieldAlert,
   FileWarning,
   CheckCheck,
+  FilePlus2,
+  Receipt,
+  Package,
+  Coins,
+  FlaskConical,
+  SlidersHorizontal,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -41,6 +47,7 @@ export default function Sidebar({
 }) {
   const [isCalMenuOpen, setIsCalMenuOpen] = useState(true);
   const [isQualityMenuOpen, setIsQualityMenuOpen] = useState(true);
+  const [isQuotesMenuOpen, setIsQuotesMenuOpen] = useState(true);
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
 
@@ -59,13 +66,26 @@ export default function Sidebar({
     icon: React.ReactNode;
     label: string;
   }) => {
+    // Rutas hermanas con su propio NavItem: si el href es el "padre" (ej. /quotes),
+    // no debe iluminarse cuando en realidad estamos en una hermana más específica
+    // (ej. /quotes/new) que ya tiene su propia entrada en el menú.
+    const siblingRoutes: Record<string, string[]> = {
+      "/calibration": ["/calibration/new"],
+      "/quotes": [
+        "/quotes/new",
+        "/quotes/catalog",
+        "/quotes/labor-rates",
+        "/quotes/methods",
+        "/quotes/parameters",
+      ],
+    };
+
     let isActive = pathname === href;
     if (!isActive && href !== "/dashboard" && href !== "/quality" && pathname.startsWith(href)) {
-      if (href === "/calibration" && pathname.startsWith("/calibration/new")) {
-        isActive = false;
-      } else {
-        isActive = true;
-      }
+      const isSiblingPath = siblingRoutes[href]?.some((sibling) =>
+        pathname.startsWith(sibling),
+      );
+      isActive = !isSiblingPath;
     }
 
     return (
@@ -215,6 +235,48 @@ export default function Sidebar({
                     <NavItem href="/quality" icon={<ShieldAlert size={14} />} label="Dashboard" />
                     <NavItem href="/quality/nc" icon={<FileWarning size={14} />} label="No Conformidades" />
                     <NavItem href="/quality/ac" icon={<CheckCheck size={14} />} label="Acciones Correctivas" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {["admin", "supervisor", "auditor"].includes(user?.role ?? "") && (
+            <div className="pt-3 pb-1">
+              <button
+                onClick={() => setIsQuotesMenuOpen(!isQuotesMenuOpen)}
+                className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider hover-bg rounded-md transition-colors"
+                style={{ color: "var(--text-muted)" }}
+              >
+                <span className="flex items-center gap-1.5 whitespace-nowrap">
+                  Cotizaciones
+                </span>
+                <ChevronDown
+                  size={14}
+                  className={`transform transition-transform ${isQuotesMenuOpen ? "" : "-rotate-90"} shrink-0`}
+                />
+              </button>
+
+              <AnimatePresence>
+                {isQuotesMenuOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="overflow-hidden mt-1 ml-1.5 pl-1.5 space-y-0.5"
+                    style={{ borderLeft: "1px solid var(--border-color)" }}
+                  >
+                    {["admin", "supervisor"].includes(user?.role ?? "") && (
+                      <NavItem href="/quotes/new" icon={<FilePlus2 size={14} />} label="Nueva Cotización" />
+                    )}
+                    <NavItem href="/quotes" icon={<Receipt size={14} />} label="Cotizaciones" />
+                    <NavItem href="/quotes/catalog" icon={<Package size={14} />} label="Catálogo" />
+                    <NavItem href="/quotes/labor-rates" icon={<Coins size={14} />} label="Tarifas de Mano de Obra" />
+                    <NavItem href="/quotes/methods" icon={<FlaskConical size={14} />} label="Métodos NDT" />
+                    {["admin", "supervisor"].includes(user?.role ?? "") && (
+                      <NavItem href="/quotes/parameters" icon={<SlidersHorizontal size={14} />} label="Parámetros" />
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

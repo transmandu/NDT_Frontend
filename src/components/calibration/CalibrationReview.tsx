@@ -46,6 +46,7 @@ import {
   Loader2,
   Download,
   FileCheck,
+  Eye,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import AuditMathBreakdown from "@/components/calibration/AuditMathBreakdown";
@@ -70,6 +71,7 @@ export default function CalibrationReview({
   const [actionLoading, setActionLoading] = useState(false);
   const [approvedCertId, setApprovedCertId] = useState<number | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
 
@@ -101,6 +103,38 @@ export default function CalibrationReview({
       toast.error(axiosErr.userMessage || "Error al aprobar la sesion");
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handlePreviewCert = async () => {
+    // Se abre la pestaña de inmediato (sincrónico con el clic) para que el
+    // navegador no la bloquee como popup — si se abre después del `await`
+    // pierde la asociación con el gesto del usuario y se bloquea en silencio.
+    const previewWindow = window.open("", "_blank");
+    setPreviewing(true);
+    try {
+      const res = await api.get(
+        `/calibration/sessions/${id}/certificates/preview`,
+        { responseType: "blob" },
+      );
+      const url = window.URL.createObjectURL(
+        new Blob([res.data], { type: "application/pdf" }),
+      );
+      if (previewWindow) {
+        previewWindow.location.href = url;
+      } else {
+        toast.error(
+          "El navegador bloqueó la ventana emergente. Habilite los pop-ups para este sitio e intente de nuevo.",
+        );
+      }
+    } catch (err: unknown) {
+      previewWindow?.close();
+      const axiosErr = err as { userMessage?: string };
+      toast.error(
+        axiosErr.userMessage || "Error al generar la vista previa",
+      );
+    } finally {
+      setPreviewing(false);
     }
   };
 
@@ -417,7 +451,10 @@ export default function CalibrationReview({
 
         {/* 2. Standards used — traceability (ISO 17025 §6.5) */}
         {session.standards && session.standards.length > 0 && (
-          <StandardsTraceabilityTable standards={session.standards} />
+          <StandardsTraceabilityTable
+            standards={session.standards}
+            rangeMaxMm={session.instrument?.range_max}
+          />
         )}
 
         {/* 3. GUM Budget — shown ONCE, before results */}
@@ -790,6 +827,30 @@ export default function CalibrationReview({
           )}
         </AnimatePresence>
 
+        {/* Vista previa del certificado — disponible en cualquier estado, no oficial */}
+        <div
+          className="mt-6 pt-4 flex justify-end"
+          style={{ borderTop: "1px solid var(--border-color)" }}
+        >
+          <button
+            onClick={handlePreviewCert}
+            disabled={previewing}
+            title="Genera un PDF de ejemplo con los datos actuales de la sesión, sin emitir un certificado oficial"
+            className="h-8 px-4 rounded-md text-xs font-medium flex items-center gap-1.5 disabled:opacity-60 hover-bg transition-colors"
+            style={{
+              border: "1px solid var(--border-color)",
+              color: "var(--text-muted)",
+            }}
+          >
+            {previewing ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Eye size={12} />
+            )}
+            Vista Previa del Certificado
+          </button>
+        </div>
+
         {/* Auditor Actions */}
         {isAuditor && isPending && (
           <div
@@ -1109,7 +1170,11 @@ function ResultsTable({
         >
           {results.map((r, i) => (
             <motion.tr
-              key={r.nominal_value ?? `result-${i}`}
+              key={
+                r.nominal_value != null
+                  ? `${r.nominal_value}-${r.function ?? "base"}-${i}`
+                  : `result-${i}`
+              }
               initial={
                 highlight ? { backgroundColor: "rgba(255,165,38,0.1)" } : {}
               }
@@ -1374,7 +1439,14 @@ function pickStandardField<K extends keyof StandardSnapshot>(
   return fromLive === null ? undefined : (fromLive as StandardSnapshot[K]);
 }
 
-function StandardsTraceabilityTable({ standards }: { standards: Standard[] }) {
+function StandardsTraceabilityTable({
+  standards,
+  rangeMaxMm,
+}: {
+  standards: Standard[];
+  /** Alcance máximo (mm) del instrumento calibrado — usado para mostrar U_cert a L_max (ISO 3650). */
+  rangeMaxMm?: number | null;
+}) {
   const bd = "1px solid var(--border-color)";
   const today = new Date();
 
@@ -1445,11 +1517,18 @@ function StandardsTraceabilityTable({ standards }: { standards: Standard[] }) {
               const u =
                 pickStandardField(std, "uncertainty_u") ?? std.uncertainty_u;
               const k = pickStandardField(std, "k_factor") ?? std.k_factor;
+              const slope =
+                pickStandardField(std, "uncertainty_slope") ??
+                std.uncertainty_slope;
               const calDate =
                 pickStandardField(std, "calibration_date") ??
                 std.calibration_date;
               const oiml =
                 pickStandardField(std, "oiml_class") ?? std.oiml_class;
+              const uAtMax =
+                slope != null && rangeMaxMm != null
+                  ? u + slope * rangeMaxMm * 1000
+                  : null;
               return (
                 <tr key={std.id} className="hover-bg transition-colors">
                   <td className="px-3 py-2">
@@ -1478,6 +1557,14 @@ function StandardsTraceabilityTable({ standards }: { standards: Standard[] }) {
                   </td>
                   <td className="px-3 py-2 text-right font-mono">
                     {formatUncertainty(u)}
+                    {uAtMax != null && (
+                      <span
+                        className="block text-[9px] font-sans"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        = a + b·L → {formatUncertainty(uAtMax)} @ {rangeMaxMm} mm
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right font-mono">
                     {formatMeasured(k)}

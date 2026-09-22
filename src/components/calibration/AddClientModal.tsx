@@ -176,7 +176,7 @@ export function AddClientModal({
             style={{ backgroundColor: C.primary, color: "#2C2C2C" }}
           >
             {saving && <Loader2 size={12} className="animate-spin" />}
-            Guardar Cliente
+            Guardar Datos
           </button>
         </div>
       </motion.div>

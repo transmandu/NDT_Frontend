@@ -31,6 +31,7 @@ import {
   FileWarning,
   ShieldAlert,
   CheckCheck,
+  FileClock,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import api from "@/lib/api";
@@ -49,15 +50,23 @@ type QualityNotificationType =
   | "nc_closed"
   | "nc_cancelled";
 
+type CommercialNotificationType = "quote_expiring_soon" | "exchange_rate_stale";
+
 interface Notification {
   id: string;
-  type: "pending_review" | "rejected" | "stale_draft" | QualityNotificationType;
+  type:
+    | "pending_review"
+    | "rejected"
+    | "stale_draft"
+    | QualityNotificationType
+    | CommercialNotificationType;
   priority: "high" | "medium" | "low";
   title: string;
   message: string;
   session_id?: number;
   nc_id?: number;
   ac_id?: number;
+  quote_id?: number;
   age: string;
   technician?: string;
   reason?: string;
@@ -73,6 +82,14 @@ const QUALITY_TYPES = new Set<string>([
   "nc_cancelled",
 ]);
 
+const COMMERCIAL_TYPES = new Set<string>(["quote_expiring_soon", "exchange_rate_stale"]);
+
+const CALIBRATION_TYPES = new Set<string>([
+  "pending_review",
+  "rejected",
+  "stale_draft",
+]);
+
 /** Icono específico por tipo de notificación de Calidad — el resto usa el ícono genérico por prioridad. */
 const QUALITY_ICONS: Record<QualityNotificationType, typeof AlertCircle> = {
   nc_issued_certificate_impact: ShieldAlert,
@@ -82,6 +99,11 @@ const QUALITY_ICONS: Record<QualityNotificationType, typeof AlertCircle> = {
   nc_assigned: FileWarning,
   nc_closed: CheckCircle2,
   nc_cancelled: AlertCircle,
+};
+
+const COMMERCIAL_ICONS: Record<CommercialNotificationType, typeof AlertCircle> = {
+  quote_expiring_soon: FileClock,
+  exchange_rate_stale: Clock,
 };
 
 interface NotificationsResponse {
@@ -191,8 +213,10 @@ export default function Header({
     // ac_verified/ac_not_effective traen ambos ids (para poder linkear a la NC
     // padre desde la lista) — pero si hay ac_id, la notificación es sobre esa
     // AC puntual, así que debe ganar sobre nc_id.
-    if (n.ac_id) router.push(`/quality/ac/${n.ac_id}`);
+    if (n.type === "exchange_rate_stale") router.push("/quotes/parameters");
+    else if (n.ac_id) router.push(`/quality/ac/${n.ac_id}`);
     else if (n.nc_id) router.push(`/quality/nc/${n.nc_id}`);
+    else if (n.quote_id) router.push(`/quotes/${n.quote_id}`);
     else if (n.session_id) router.push(`/calibration?review=${n.session_id}`);
   };
 
@@ -566,9 +590,12 @@ export default function Header({
                     data?.items.map((n) => {
                       const style = PRIORITY_STYLES[n.priority];
                       const isQuality = QUALITY_TYPES.has(n.type);
+                      const isCommercial = COMMERCIAL_TYPES.has(n.type);
                       const Icon = isQuality
                         ? QUALITY_ICONS[n.type as QualityNotificationType]
-                        : style.icon;
+                        : isCommercial
+                          ? COMMERCIAL_ICONS[n.type as CommercialNotificationType]
+                          : style.icon;
                       // Parpadeo rojo cuando la verificación de eficacia ya venció (plan §5.3).
                       const isOverdue = n.type === "ac_due_verification" && n.priority === "high";
                       return (
@@ -655,7 +682,7 @@ export default function Header({
                     className="px-4 py-2.5 flex flex-col gap-1"
                     style={{ borderTop: "1px solid var(--border-color)" }}
                   >
-                    {data.items.some((n) => !QUALITY_TYPES.has(n.type)) && (
+                    {data.items.some((n) => CALIBRATION_TYPES.has(n.type)) && (
                       <button
                         onClick={() => {
                           setIsOpen(false);
@@ -677,6 +704,18 @@ export default function Header({
                         style={{ color: "var(--brand-primary)" }}
                       >
                         Ver todas en Gestión de Calidad →
+                      </button>
+                    )}
+                    {data.items.some((n) => COMMERCIAL_TYPES.has(n.type)) && (
+                      <button
+                        onClick={() => {
+                          setIsOpen(false);
+                          router.push("/quotes");
+                        }}
+                        className="w-full text-center text-[10px] font-semibold transition-colors"
+                        style={{ color: "var(--brand-primary)" }}
+                      >
+                        Ver todas en Cotizaciones →
                       </button>
                     )}
                   </div>
