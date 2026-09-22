@@ -70,7 +70,7 @@ export default function NewQuotePage() {
   const [quote, setQuote] = useState<Quote | null>(null);
 
   return (
-    <div className="space-y-4 w-full animate-fadeIn max-w-3xl">
+    <div className="space-y-4 w-full animate-fadeIn">
       <Stepper current={step} quote={quote} />
 
       {step === 1 && (

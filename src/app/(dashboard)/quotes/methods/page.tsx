@@ -17,20 +17,19 @@ import toast from "react-hot-toast";
 import { Plus, Pencil, X, Loader2, FlaskConical } from "lucide-react";
 import { C } from "@/lib/colors";
 import { Field } from "@/app/(dashboard)/quotes/catalog/page";
+import QuoteLinesEditor, {
+  linesFromSchema,
+  serializeLines,
+  validateLines,
+  type LinesState,
+  type MethodUiSchema,
+} from "@/components/quotes/QuoteLinesEditor";
 
 /* ─── Zod schema — refleja exactamente las reglas de QuoteMethodController ─── */
 const quoteMethodSchema = z.object({
   code: z.string().min(1, "Código requerido").max(255),
   name: z.string().min(1, "Nombre requerido").max(255),
   default_unit: z.string().max(255).optional().or(z.literal("")),
-  ui_schema: z.string().min(1, "Requerido").refine((v) => {
-    try {
-      const parsed = JSON.parse(v);
-      return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed);
-    } catch {
-      return false;
-    }
-  }, "Debe ser un JSON válido (objeto — ej. { \"materials\": [...] })"),
   is_active: z.boolean().optional(),
 });
 type QuoteMethodForm = z.infer<typeof quoteMethodSchema>;
@@ -53,7 +52,7 @@ export default function QuoteMethodsPage() {
         accessorKey: "code",
         header: "Código",
         cell: ({ getValue }) => (
-          <span className="font-mono font-bold text-[11px]" style={{ color: C.primary }}>
+          <span className="font-mono font-bold text-sm" style={{ color: C.primary }}>
             {getValue<string>()}
           </span>
         ),
@@ -79,20 +78,21 @@ export default function QuoteMethodsPage() {
       },
       {
         id: "schema_summary",
-        header: "Partidas en ui_schema",
+        header: "Plantilla de partida",
         enableColumnFilter: false,
         enableSorting: false,
         cell: ({ row }) => {
-          const schema = row.original.ui_schema ?? {};
-          const counts = ["materials", "equipment", "labor"]
-            .map((k) => {
-              const arr = (schema as Record<string, unknown>)[k];
-              return Array.isArray(arr) && arr.length > 0 ? `${k[0].toUpperCase()}:${arr.length}` : null;
-            })
-            .filter(Boolean);
+          const schema = (row.original.ui_schema ?? {}) as MethodUiSchema;
+          const counts = [
+            ["Mat.", schema.materials],
+            ["Eq.", schema.equipment],
+            ["MO", schema.labor],
+          ]
+            .filter(([, arr]) => Array.isArray(arr) && arr.length > 0)
+            .map(([label, arr]) => `${label} ${(arr as unknown[]).length}`);
           return (
             <span className="text-sm font-mono" style={{ color: "var(--text-muted)" }}>
-              {counts.length > 0 ? counts.join(" ") : "—"}
+              {counts.length > 0 ? counts.join(" · ") : "—"}
             </span>
           );
         },
@@ -188,12 +188,6 @@ export default function QuoteMethodsPage() {
 /* ══════════════════════════════════════════════════════════ */
 /*  MODAL                                                      */
 /* ══════════════════════════════════════════════════════════ */
-const DEFAULT_SCHEMA = JSON.stringify(
-  { materials: [], equipment: [], labor: [] },
-  null,
-  2,
-);
-
 function QuoteMethodModal({
   method,
   onClose,
@@ -215,15 +209,24 @@ function QuoteMethodModal({
           code: method.code,
           name: method.name,
           default_unit: method.default_unit,
-          ui_schema: JSON.stringify(method.ui_schema ?? {}, null, 2),
           is_active: method.is_active,
         }
-      : { default_unit: "Serv", ui_schema: DEFAULT_SCHEMA, is_active: true },
+      : { default_unit: "Serv", is_active: true },
   });
 
+  const [lines, setLines] = useState<LinesState>(() =>
+    linesFromSchema(method?.ui_schema as MethodUiSchema | undefined),
+  );
+
   const onSubmit = async (data: QuoteMethodForm) => {
+    const linesError = validateLines(lines);
+    if (linesError) {
+      toast.error(linesError);
+      return;
+    }
     try {
-      const payload = { ...data, ui_schema: JSON.parse(data.ui_schema) };
+      // Se conservan las claves del esquema que este editor no maneja (si las hubiera).
+      const payload = { ...data, ui_schema: { ...(method?.ui_schema ?? {}), ...serializeLines(lines) } };
       if (isEdit) {
         await api.put(`/quote-methods/${method.id}`, payload);
         toast.success("Método actualizado");
@@ -251,7 +254,7 @@ function QuoteMethodModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ duration: 0.18 }}
-        className="w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col"
+        className="w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden flex flex-col"
         style={{ backgroundColor: "var(--bg-panel)", border: "1px solid var(--border-color)", maxHeight: "94vh" }}
       >
         <div
@@ -282,18 +285,19 @@ function QuoteMethodModal({
             <Field label="Nombre *" error={errors.name?.message}>
               <input {...register("name")} className="field-input" placeholder="Inspección Visual" />
             </Field>
-            <Field
-              label="ui_schema (JSON) *"
-              error={errors.ui_schema?.message}
-              hint="Define las partidas por defecto de materiales/equipo/mano de obra para este método"
-            >
-              <textarea
-                {...register("ui_schema")}
-                rows={10}
-                spellCheck={false}
-                className="field-input font-mono text-[10px] leading-relaxed"
-              />
-            </Field>
+            <div className="space-y-3 rounded-md p-4" style={{ backgroundColor: "var(--bg-app)", border: "1px solid var(--border-color)" }}>
+              <div>
+                <p className="text-[11px] font-bold" style={{ color: "var(--text-main)" }}>
+                  Plantilla de partida
+                </p>
+                <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  Materiales, equipo y mano de obra que se precargan al elegir este método en una cotización.
+                  El usuario podrá ajustar cantidades o quitar y agregar líneas en cada partida; cambiar la
+                  plantilla aquí no modifica cotizaciones ya creadas.
+                </p>
+              </div>
+              <QuoteLinesEditor value={lines} onChange={setLines} />
+            </div>
             {isEdit && (
               <label className="flex items-center gap-2 cursor-pointer pt-1">
                 <input type="checkbox" className="w-4 h-4 rounded accent-orange-500" {...register("is_active")} />
