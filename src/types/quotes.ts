@@ -75,6 +75,14 @@ export interface QuoteParameter {
   created_by: DecimalString | null;
 }
 
+/** Refleja ExchangeRateController::current() — última tasa BCV obtenida automáticamente. */
+export interface BcvExchangeRate {
+  rate: DecimalString;
+  value_date: string;
+  source: "api" | "bcv_scrape";
+  fetched_at: string;
+}
+
 /** Refleja QuoteItemLineResource. */
 export interface QuoteItemLine {
   id: number;

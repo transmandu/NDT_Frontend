@@ -50,7 +50,7 @@ type QualityNotificationType =
   | "nc_closed"
   | "nc_cancelled";
 
-type CommercialNotificationType = "quote_expiring_soon";
+type CommercialNotificationType = "quote_expiring_soon" | "exchange_rate_stale";
 
 interface Notification {
   id: string;
@@ -82,7 +82,7 @@ const QUALITY_TYPES = new Set<string>([
   "nc_cancelled",
 ]);
 
-const COMMERCIAL_TYPES = new Set<string>(["quote_expiring_soon"]);
+const COMMERCIAL_TYPES = new Set<string>(["quote_expiring_soon", "exchange_rate_stale"]);
 
 const CALIBRATION_TYPES = new Set<string>([
   "pending_review",
@@ -103,6 +103,7 @@ const QUALITY_ICONS: Record<QualityNotificationType, typeof AlertCircle> = {
 
 const COMMERCIAL_ICONS: Record<CommercialNotificationType, typeof AlertCircle> = {
   quote_expiring_soon: FileClock,
+  exchange_rate_stale: Clock,
 };
 
 interface NotificationsResponse {
@@ -212,7 +213,8 @@ export default function Header({
     // ac_verified/ac_not_effective traen ambos ids (para poder linkear a la NC
     // padre desde la lista) — pero si hay ac_id, la notificación es sobre esa
     // AC puntual, así que debe ganar sobre nc_id.
-    if (n.ac_id) router.push(`/quality/ac/${n.ac_id}`);
+    if (n.type === "exchange_rate_stale") router.push("/quotes/parameters");
+    else if (n.ac_id) router.push(`/quality/ac/${n.ac_id}`);
     else if (n.nc_id) router.push(`/quality/nc/${n.nc_id}`);
     else if (n.quote_id) router.push(`/quotes/${n.quote_id}`);
     else if (n.session_id) router.push(`/calibration?review=${n.session_id}`);

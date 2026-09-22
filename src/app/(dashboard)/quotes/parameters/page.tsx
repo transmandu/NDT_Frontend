@@ -10,7 +10,7 @@ import api from "@/lib/api";
 import { useAuthStore } from "@/stores/authStore";
 import { getApiError } from "@/lib/apiErrors";
 import { fmtDate } from "@/utils/formatters";
-import type { QuoteParameter } from "@/types/quotes";
+import type { BcvExchangeRate, QuoteParameter } from "@/types/quotes";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { Plus, X, Loader2, SlidersHorizontal, AlertTriangle, History } from "lucide-react";
@@ -71,6 +71,11 @@ export default function QuoteParametersPage() {
     queryFn: () => api.get("/quote-parameters/current").then((r) => r.data.data),
   });
 
+  const { data: bcvRate } = useQuery<BcvExchangeRate | null>({
+    queryKey: ["exchange-rates", "current"],
+    queryFn: () => api.get("/exchange-rates/current").then((r) => r.data.data),
+  });
+
   const { data: history = [] } = useQuery<QuoteParameter[]>({
     queryKey: ["quote-parameters", "history"],
     queryFn: () => api.get("/quote-parameters").then((r) => r.data.data || []),
@@ -121,7 +126,15 @@ export default function QuoteParametersPage() {
               emitidas.
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <Stat label="Tasa Bs/USD" value={Number(current.exchange_rate_bs_usd).toFixed(4)} />
+              <Stat
+                label="Tasa Bs/USD"
+                value={Number(bcvRate?.rate ?? current.exchange_rate_bs_usd).toFixed(4)}
+                hint={
+                  bcvRate
+                    ? `BCV del ${fmtDate(bcvRate.value_date)} (${bcvRate.source === "api" ? "API" : "bcv.org.ve"})`
+                    : "Manual — sin tasa BCV aún"
+                }
+              />
               <Stat label="Factor Costo USD" value={Number(current.usd_cost_factor).toFixed(4)} />
               <Stat
                 label="Factor FCAS"
@@ -204,7 +217,7 @@ export default function QuoteParametersPage() {
 
       <AnimatePresence>
         {modalOpen && (
-          <NewParametersModal current={current} onClose={() => setModalOpen(false)} />
+          <NewParametersModal current={current} bcvRate={bcvRate} onClose={() => setModalOpen(false)} />
         )}
       </AnimatePresence>
     </div>
@@ -216,9 +229,11 @@ export default function QuoteParametersPage() {
 /* ══════════════════════════════════════════════════════════ */
 function NewParametersModal({
   current,
+  bcvRate,
   onClose,
 }: {
   current: QuoteParameter | undefined;
+  bcvRate: BcvExchangeRate | null | undefined;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -233,7 +248,7 @@ function NewParametersModal({
     defaultValues: current
       ? {
           effective_from: new Date().toISOString().slice(0, 10),
-          exchange_rate_bs_usd: Number(current.exchange_rate_bs_usd),
+          exchange_rate_bs_usd: Number(bcvRate?.rate ?? current.exchange_rate_bs_usd),
           usd_cost_factor: Number(current.usd_cost_factor),
           salary_increase_factor: Number(current.salary_increase_factor),
           fcas_factor: Number(current.fcas_factor),
@@ -245,6 +260,7 @@ function NewParametersModal({
         }
       : {
           effective_from: new Date().toISOString().slice(0, 10),
+          exchange_rate_bs_usd: bcvRate ? Number(bcvRate.rate) : undefined,
           salary_reference: "custom",
         },
   });
@@ -318,8 +334,19 @@ function NewParametersModal({
             </Field>
 
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Tasa Bs/USD *" error={errors.exchange_rate_bs_usd?.message}>
-                <input {...register("exchange_rate_bs_usd")} type="number" step="any" min="0" className="field-input font-mono" />
+              <Field
+                label="Tasa Bs/USD *"
+                error={errors.exchange_rate_bs_usd?.message}
+                hint="Solo lectura — se actualiza automáticamente desde el BCV"
+              >
+                <input
+                  {...register("exchange_rate_bs_usd")}
+                  type="number"
+                  step="any"
+                  readOnly
+                  tabIndex={-1}
+                  className="field-input font-mono cursor-not-allowed opacity-70"
+                />
               </Field>
               <Field label="Factor Costo USD *" error={errors.usd_cost_factor?.message} hint="Sobrecosto de importación">
                 <input {...register("usd_cost_factor")} type="number" step="any" min="0" className="field-input font-mono" />
