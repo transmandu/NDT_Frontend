@@ -204,13 +204,16 @@ function findCategoryByKey(key: string | null): StdCat | null {
 const standardSchema = z.object({
   internal_code: z.string().min(1, "Código requerido"),
   name: z.string().min(1, "Nombre requerido"),
-  brand: z.string().nullable().optional(),
-  model: z.string().nullable().optional(),
+  // brand/model/serial_number/resolution/unit son NOT NULL en la tabla
+  // 'standards' — deben ser obligatorios aquí también, o el error solo
+  // aparece como un 500 del servidor al guardar (ver StandardController).
+  brand: z.string().min(1, "Marca requerida"),
+  model: z.string().min(1, "Modelo requerido"),
   material: z.string().nullable().optional(),
   grade: z.string().nullable().optional(),
-  serial_number: z.string().nullable().optional(),
-  resolution: z.coerce.number().nullable().optional(),
-  unit: z.string().nullable().optional(),
+  serial_number: z.string().min(1, "Número de serie requerido"),
+  resolution: z.coerce.number().positive("Debe ser > 0"),
+  unit: z.string().min(1, "Unidad requerida"),
   category: z.string().min(1, "Categoría requerida"),
   is_certified: z.boolean().optional(),
   certificate_number: z.string().nullable().optional(),
@@ -221,6 +224,7 @@ const standardSchema = z.object({
   calibrated_by_lab: z.string().nullable().optional(),
   /* Category extras */
   uncertainty_slope: z.coerce.number().nullable().optional(),
+  uncertainty_slope_source: z.enum(["certificate", "grade_table", "manual_estimate"]).nullable().optional(),
   oiml_class: z.string().nullable().optional(),
   drift_rate_per_year: z.coerce.number().nullable().optional(),
   mass_density: z.coerce.number().nullable().optional(),
@@ -245,7 +249,35 @@ const standardSchema = z.object({
       });
     }
   }
+  // Fechas con sentido físico: un certificado no puede calibrarse en el
+  // futuro, ni vencer antes de haberse calibrado.
+  if (val.calibration_date) {
+    const today = new Date().toISOString().split("T")[0];
+    if (val.calibration_date > today) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["calibration_date"],
+        message: "No puede ser una fecha futura",
+      });
+    }
+  }
+  if (val.calibration_date && val.expiry_date && val.expiry_date < val.calibration_date) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["expiry_date"],
+      message: "No puede ser anterior a la fecha de calibración",
+    });
+  }
   if (val.category !== "dimensional" || val.uncertainty_slope == null || val.uncertainty_slope === 0) return;
+  // Un valor de b sin origen declarado es indistinguible de un dato real de
+  // certificado (ISO/IEC 17025 §7.6, §7.8.4.1c) — se obliga a elegirlo.
+  if (!val.uncertainty_slope_source) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["uncertainty_slope_source"],
+      message: "Debe indicar el origen de b",
+    });
+  }
   const base = val.uncertainty_u;
   const slope = val.uncertainty_slope;
   if (base <= 0) return;
@@ -704,11 +736,12 @@ function StandardModal({
           expiry_date: standard.expiry_date?.split("T")[0] ?? "",
           calibrated_by_lab: standard.calibrated_by_lab ?? "",
           uncertainty_slope: standard.uncertainty_slope ?? undefined,
+          uncertainty_slope_source: standard.uncertainty_slope_source ?? undefined,
           oiml_class: standard.oiml_class ?? "",
           drift_rate_per_year: standard.drift_rate_per_year ?? undefined,
           mass_density: standard.mass_density ?? undefined,
         }
-      : { k_factor: 2, is_certified: true },
+      : { k_factor: 2, is_certified: false },
   });
 
   const isCertified = watch("is_certified") !== false;
@@ -719,6 +752,7 @@ function StandardModal({
     setValue("uncertainty_u", defaults.uncertainty_u);
     setValue("uncertainty_slope", defaults.uncertainty_slope);
     setValue("drift_rate_per_year", defaults.drift_rate_per_year);
+    setValue("uncertainty_slope_source", "grade_table");
   };
 
   useEffect(() => {
@@ -922,7 +956,7 @@ function StandardModal({
                       />
                     </Fld>
                     <Fld
-                      label="Marca / Fabricante"
+                      label="Marca / Fabricante *"
                       error={errors.brand?.message}
                     >
                       <input
@@ -931,7 +965,7 @@ function StandardModal({
                         className="field-input"
                       />
                     </Fld>
-                    <Fld label="Modelo" error={errors.model?.message}>
+                    <Fld label="Modelo *" error={errors.model?.message}>
                       <input
                         {...register("model")}
                         placeholder="Número de modelo"
@@ -946,7 +980,7 @@ function StandardModal({
                       />
                     </Fld>
                     <Fld
-                      label="Número de Serie"
+                      label="Número de Serie *"
                       error={errors.serial_number?.message}
                     >
                       <input
@@ -971,14 +1005,14 @@ function StandardModal({
                 {/* Características Metrológicas */}
                 <Sec title="Características Metrológicas">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Fld label="Unidad de Medida" error={errors.unit?.message}>
+                    <Fld label="Unidad de Medida *" error={errors.unit?.message}>
                       <input
                         {...register("unit")}
                         placeholder={selectedCat?.unit ?? "mm, g, V…"}
                         className="field-input"
                       />
                     </Fld>
-                    <Fld label="Resolución" error={errors.resolution?.message}>
+                    <Fld label="Resolución *" error={errors.resolution?.message}>
                       <input
                         {...register("resolution")}
                         type="number"
@@ -1031,20 +1065,36 @@ function StandardModal({
                     title="Grado de Exactitud"
                     hint="ISO 3650 — al elegir el grado se sugieren valores de incertidumbre (a, b) y deriva, ajústelos según el certificado real del bloque."
                   >
-                    <Fld label="Grado" error={errors.grade?.message}>
-                      <select
-                        {...register("grade", {
-                          onChange: (e) => applyGradeDefaults(e.target.value),
-                        })}
-                        className="field-input"
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Fld label="Grado" error={errors.grade?.message}>
+                        <select
+                          {...register("grade", {
+                            onChange: (e) => applyGradeDefaults(e.target.value),
+                          })}
+                          className="field-input"
+                        >
+                          <option value="">— Seleccionar —</option>
+                          <option value="0">Grado 0</option>
+                          <option value="1">Grado 1</option>
+                          <option value="2">Grado 2</option>
+                          <option value="3">Grado 3</option>
+                        </select>
+                      </Fld>
+                      <Fld
+                        label="Origen de b (pendiente)"
+                        error={errors.uncertainty_slope_source?.message}
                       >
-                        <option value="">— Seleccionar —</option>
-                        <option value="0">Grado 0</option>
-                        <option value="1">Grado 1</option>
-                        <option value="2">Grado 2</option>
-                        <option value="3">Grado 3</option>
-                      </select>
-                    </Fld>
+                        <select
+                          {...register("uncertainty_slope_source")}
+                          className="field-input"
+                        >
+                          <option value="">— Seleccionar —</option>
+                          <option value="certificate">Del certificado de calibración</option>
+                          <option value="grade_table">Tabla ISO 3650 (por grado, no verificado)</option>
+                          <option value="manual_estimate">Estimación manual</option>
+                        </select>
+                      </Fld>
+                    </div>
                   </Sec>
                 )}
 

@@ -293,6 +293,7 @@ export interface StandardSnapshot {
   uncertainty_u?: number;
   k_factor?: number;
   uncertainty_slope?: number | null;
+  uncertainty_slope_source?: "certificate" | "grade_table" | "manual_estimate" | null;
   drift_rate_per_year?: number | null;
   oiml_class?: string | null;
   mass_density?: number | null;
@@ -345,6 +346,7 @@ export interface Standard {
   oiml_class: string | null;           // Mass: E1, E2, F1, F2, M1…
   mass_density: number | null;         // Mass: kg/m³ for air buoyancy
   uncertainty_slope: number | null;    // Dimensional: b in U=a+b·L
+  uncertainty_slope_source: "certificate" | "grade_table" | "manual_estimate" | null;
   is_expired?: boolean | null;
   is_usable_in_calibration?: boolean;
   created_at?: string;
