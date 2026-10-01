@@ -185,6 +185,12 @@ export default function NewCalibrationPage() {
   const [environmentalData, setEnvironmentalData] = useState<
     Record<string, string>
   >({});
+  // Origen declarado de la pendiente (b) del patrón seleccionado — solo para
+  // mostrar el badge de procedencia junto al campo readonly; no se envía
+  // como metadata (el backend ya lo lee del snapshot del propio patrón).
+  const [standardSlopeSource, setStandardSlopeSource] = useState<
+    "certificate" | "grade_table" | "manual_estimate" | null
+  >(null);
   // ── Certificate dates (static fields — not driven by schema) ──
   const [calibrationDate, setCalibrationDate] = useState(
     () => new Date().toISOString().split("T")[0],
@@ -597,6 +603,8 @@ export default function NewCalibrationPage() {
   // Only fills fields still empty — does NOT overwrite user edits.
   useEffect(() => {
     if (!selectedInst || !selectedStd) return;
+
+    setStandardSlopeSource(selectedStd.uncertainty_slope_source ?? null);
 
     setEnvironmentalData((prev) => {
       const next = { ...prev };
@@ -1916,6 +1924,25 @@ export default function NewCalibrationPage() {
                                     </span>
                                   ) : null}
                                 </span>
+                                {req.field === "standard_u_slope" && (
+                                  <span
+                                    className="text-[8px] font-semibold uppercase tracking-wide"
+                                    style={{
+                                      color:
+                                        standardSlopeSource === "certificate"
+                                          ? "var(--text-muted)"
+                                          : "#b45309",
+                                    }}
+                                  >
+                                    {standardSlopeSource === "certificate"
+                                      ? "Certificado"
+                                      : standardSlopeSource === "grade_table"
+                                        ? "⚠ Tabla ISO 3650, no verificado"
+                                        : standardSlopeSource === "manual_estimate"
+                                          ? "⚠ Estimación manual"
+                                          : "⚠ Sin origen declarado"}
+                                  </span>
+                                )}
                               </div>
                             );
                           })}
