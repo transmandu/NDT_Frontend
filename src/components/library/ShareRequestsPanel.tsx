@@ -158,14 +158,20 @@ export function ShareRequestsPanel({
                       <div className="flex items-center gap-2 mt-2 p-2 rounded-md text-[11px]" style={{ border: "1px solid var(--border-color)", backgroundColor: "var(--bg-app)" }}>
                         <Link2 size={12} className="shrink-0" style={{ color: C.accent }} />
                         <div className="flex-1 min-w-0">
-                          <p className="truncate" style={{ color: "var(--text-main)" }}>{r.shared_link.url}</p>
+                          {r.shared_link.url ? (
+                            <p className="truncate" style={{ color: "var(--text-main)" }}>{r.shared_link.url}</p>
+                          ) : (
+                            <p className="truncate" style={{ color: "var(--text-muted)" }}>Enlace reservado — solo el aprobador puede copiarlo</p>
+                          )}
                           <p className="flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
                             <Clock size={9} /> vence {new Date(r.shared_link.expires_at).toLocaleString("es-ES")}
                           </p>
                         </div>
-                        <button onClick={() => copyLink(r.shared_link!.url)} title="Copiar enlace" className="p-1 rounded hover-bg shrink-0" style={{ color: "var(--text-muted)" }}>
-                          <Copy size={12} />
-                        </button>
+                        {r.shared_link.url && (
+                          <button onClick={() => copyLink(r.shared_link!.url)} title="Copiar enlace" className="p-1 rounded hover-bg shrink-0" style={{ color: "var(--text-muted)" }}>
+                            <Copy size={12} />
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

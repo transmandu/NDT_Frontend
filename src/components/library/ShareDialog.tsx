@@ -55,7 +55,7 @@ export function ShareDialog({
         .then((r) => r.data.shared_link),
     onSuccess: (link) => {
       qc.invalidateQueries({ queryKey: ["libraryActiveShare", doc.id] });
-      navigator.clipboard.writeText(link.url).catch(() => {});
+      if (link.url) navigator.clipboard.writeText(link.url).catch(() => {});
       toast.success("Enlace generado y copiado al portapapeles", { duration: 5000, icon: "🔗" });
       setReason("");
     },
@@ -162,7 +162,9 @@ export function ShareDialog({
                     <p className="truncate" style={{ color: "var(--text-main)" }}>{l.shared_with_name || "Sin destinatario"} · {l.access_count} accesos</p>
                     <p className="flex items-center gap-1" style={{ color: "var(--text-muted)" }}><Clock size={9} /> vence {new Date(l.expires_at).toLocaleString("es-ES")}</p>
                   </div>
-                  <button onClick={() => copyLink(l.url)} className="p-1 rounded hover-bg shrink-0" style={{ color: "var(--text-muted)" }}><Copy size={12} /></button>
+                  {l.url && (
+                    <button onClick={() => copyLink(l.url)} className="p-1 rounded hover-bg shrink-0" style={{ color: "var(--text-muted)" }}><Copy size={12} /></button>
+                  )}
                 </div>
               ))}
             </div>
