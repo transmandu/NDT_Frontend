@@ -65,7 +65,7 @@ export interface LibrarySharedLink {
   is_expired: boolean;
   access_count: number;
   read_only: boolean;
-  url: string;
+  url?: string;
   created_at: string;
 }
 

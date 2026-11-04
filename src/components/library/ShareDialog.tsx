@@ -72,7 +72,8 @@ export function ShareDialog({
     onError: (err) => toast.error(getApiError(err)),
   });
 
-  const copyLink = (url: string) => {
+  const copyLink = (url: string | undefined) => {
+    if (!url) return;
     navigator.clipboard.writeText(url);
     toast.success("Enlace copiado");
   };
