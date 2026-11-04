@@ -7,6 +7,13 @@ export interface LibraryCategory {
   name: string;
 }
 
+/** Master data del select "Departamento" de la carga (GET /library/departments-list). */
+export interface LibraryDepartment {
+  id: number;
+  name: string;
+  code: string;
+}
+
 export interface LibraryFolderNode {
   id: number;
   name: string;

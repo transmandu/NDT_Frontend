@@ -11,19 +11,21 @@ import { getApiError } from "@/lib/apiErrors";
 import { C } from "@/lib/colors";
 import { flattenFolderOptions } from "@/lib/libraryTree";
 import { VisibilityPicker } from "./VisibilityPicker";
-import type { LibraryCategory, LibraryFolderNode, LibraryRole } from "@/types/library";
+import type { LibraryCategory, LibraryDepartment, LibraryFolderNode, LibraryRole } from "@/types/library";
 
 const MAX_SIZE_MB = 10;
 const ACCEPTED_EXT = [".pdf", ".xlsx", ".xls", ".doc", ".docx"];
 
 export function UploadModal({
   categories,
+  departments,
   folders,
   defaultFolderId,
   canSetVisibility,
   onClose,
 }: {
   categories: LibraryCategory[];
+  departments: LibraryDepartment[];
   folders: LibraryFolderNode[];
   defaultFolderId: number | null;
   canSetVisibility: boolean;
@@ -34,8 +36,10 @@ export function UploadModal({
   const [today] = useState(() => new Date().toISOString().slice(0, 10));
 
   const [title, setTitle] = useState("");
+  const [departmentId, setDepartmentId] = useState<string>("");
   const [categoryId, setCategoryId] = useState<string>("");
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryCode, setNewCategoryCode] = useState("");
   const [folderId, setFolderId] = useState<string>(
     defaultFolderId ? String(defaultFolderId) : "",
   );
@@ -81,10 +85,17 @@ export function UploadModal({
 
   const dateIsPast = requiresExpiry && expirationDate !== "" && expirationDate < today;
 
+  // La sigla solo aplica a las categorías libres; el backend exige 2-5
+  // letras mayúsculas y unicidad (D6).
+  const siglaIsValid =
+    categoryId !== "otro" || /^[A-Z]{2,5}$/.test(newCategoryCode.trim());
+
   const canSubmit =
     title.trim().length > 0 &&
+    departmentId !== "" &&
     categoryId !== "" &&
     (categoryId !== "otro" || newCategoryName.trim().length > 0) &&
+    siglaIsValid &&
     !!file &&
     (!requiresExpiry || (expirationDate !== "" && !dateIsPast)) &&
     (!requiresReview || nextReviewDate !== "");
@@ -93,8 +104,12 @@ export function UploadModal({
     if (!file) return;
     const fd = new FormData();
     fd.append("title", title.trim());
+    fd.append("department_id", departmentId);
     fd.append("category_id", categoryId);
-    if (categoryId === "otro") fd.append("new_category_name", newCategoryName.trim());
+    if (categoryId === "otro") {
+      fd.append("new_category_name", newCategoryName.trim());
+      fd.append("new_category_code", newCategoryCode.trim().toUpperCase());
+    }
     if (folderId) fd.append("folder_id", folderId);
     fd.append("requires_expiry", requiresExpiry ? "1" : "0");
     if (requiresExpiry) fd.append("expiration_date", expirationDate);
@@ -132,6 +147,16 @@ export function UploadModal({
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej: Procedimiento de calibración de balanzas" className="field-input text-xs" />
           </div>
 
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>Departamento *</label>
+            <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} className="field-input uppercase">
+              <option className="text-xs" value="">— Seleccionar —</option>
+              {departments.map((d) => (
+                <option className="text-xs uppercase" key={d.id} value={d.id}>{d.code} — {d.name}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>Categoría *</label>
@@ -155,9 +180,21 @@ export function UploadModal({
           </div>
 
           {categoryId === "otro" && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>Nombre de la nueva categoría</label>
-              <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} className="field-input" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>Nombre de la nueva categoría</label>
+                <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} className="field-input" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>Sigla (2 a 5 letras) *</label>
+                <input
+                  value={newCategoryCode}
+                  onChange={(e) => setNewCategoryCode(e.target.value.toUpperCase())}
+                  maxLength={5}
+                  placeholder="Ej: END"
+                  className="field-input uppercase"
+                />
+              </div>
             </div>
           )}
 
