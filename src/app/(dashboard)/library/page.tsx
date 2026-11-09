@@ -26,7 +26,7 @@ import { useLibraryPermissions } from "@/lib/useLibraryPermissions";
 import { useShareRequestNotifications } from "@/lib/useShareRequestNotifications";
 import { findFolderNode } from "@/lib/libraryTree";
 import { downloadBlob } from "@/lib/downloadHelper";
-import type { LibraryCategory, LibraryDocument, LibraryFolderNode, ExpiryStatus } from "@/types/library";
+import type { LibraryCategory, LibraryDepartment, LibraryDocument, LibraryFolderNode, ExpiryStatus } from "@/types/library";
 
 import { FolderTree } from "@/components/library/FolderTree";
 import { CreateFolderDialog, RenameFolderDialog, DeleteFolderDialog } from "@/components/library/FolderDialogs";
@@ -96,6 +96,13 @@ export default function LibraryPage() {
   const { data: categories = [] } = useQuery<LibraryCategory[]>({
     queryKey: ["libraryCategories"],
     queryFn: () => api.get("/library/categories-list").then((r) => r.data.categories || []),
+  });
+
+  // Master data del select "Departamento" de la carga (obligatorio para el
+  // código ORI-DEP-TIPO-SEQ); se trae junto a las categorías.
+  const { data: departments = [] } = useQuery<LibraryDepartment[]>({
+    queryKey: ["libraryDepartments"],
+    queryFn: () => api.get("/library/departments-list").then((r) => r.data.departments || []),
   });
 
   const [now] = useState(() => Date.now());
@@ -455,6 +462,7 @@ export default function LibraryPage() {
       {uploadOpen && (
         <UploadModal
           categories={categories}
+          departments={departments}
           folders={folders}
           defaultFolderId={selectedFolderId}
           canSetVisibility={perms.canSetVisibility}
