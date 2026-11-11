@@ -59,14 +59,18 @@ const colNominal: ColumnDef = {
   key: 'nominal',
   label: 'Punto Nominal',
   render: (p, { resolution }) =>
-    formatMeasured(p.nominal_value ?? p.nominal_length_mm ?? p.nominal, resolution),
+    formatMeasured(
+      p.nominal_value ?? p.nominal_length_mm ?? p.nominal,
+      p.display_resolution ?? resolution,
+    ),
 };
 
 const colError: ColumnDef = {
   key: 'error',
   label: 'Error',
   align: 'right',
-  render: (p, { resolution }) => formatSigned(p.error, resolution),
+  render: (p, { resolution }) =>
+    formatSigned(p.error, p.display_resolution ?? resolution),
 };
 
 /* ────────────────────────────────────────────────────────────────
@@ -207,7 +211,8 @@ const TORQUEMETER_COLUMNS: ColumnDef[] = [
     key: 'mean',
     label: 'Media',
     align: 'right',
-    render: (p, { resolution }) => formatMeasured(p.mean, resolution),
+    render: (p, { resolution }) =>
+      formatMeasured(p.mean, p.display_resolution ?? resolution),
   },
   {
     key: 'std',

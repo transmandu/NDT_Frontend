@@ -92,7 +92,7 @@ const INSTRUMENT_TYPES = [
     icon: "",
     category: "torque",
     unit: "N·m",
-    unitOptions: ["N·m", "kN·m", "lbf·ft", "lbf·in"],
+    unitOptions: ["N·m", "kN·m", "kgf·cm", "lbf·ft", "lbf·in"],
     color: "#F59E0B",
     description: "Calibración según ISO 6789-1:2017 y ISO 6789-2:2017",
     extras: [
