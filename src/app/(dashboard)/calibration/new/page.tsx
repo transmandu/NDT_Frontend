@@ -37,6 +37,11 @@ import DynamicGrid, {
 import { AddClientModal } from "@/components/calibration/AddClientModal";
 import { AddCalibrationLocationModal } from "@/components/calibration/AddCalibrationLocationModal";
 import { isSameCategory } from "@/lib/categoryUtils";
+import {
+  TORQUE_UNITS,
+  convertTorque,
+  tryParseTorqueUnit,
+} from "@/lib/torqueUnits";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -159,6 +164,12 @@ export default function NewCalibrationPage() {
   const [selectedStandard, setSelectedStandard] = useState("");
   // M-LAB-01 (Termohigrómetro) requiere un segundo patrón independiente para HR
   const [selectedStandard2, setSelectedStandard2] = useState("");
+
+  // ── Torque units (ISO/IEC 17025 §6.5) ──
+  // readingUnit: unidad en la que el técnico lee el display del transductor.
+  // reportUnit:  unidad en la que el certificado informa los resultados.
+  const [readingUnit, setReadingUnit] = useState("");
+  const [reportUnit, setReportUnit] = useState("");
 
   // ── Cliente / Lugar de Calibración (certificado ISO 7.8.2.e) ──
   // El N° de OT ya no se ingresa aquí: el backend lo asigna automáticamente al crear la sesión.
@@ -316,7 +327,9 @@ export default function NewCalibrationPage() {
     api
       .get(`/calibration/sessions/${sessionId}`)
       .then((res) => {
-        const session = res.data.session;
+        // GET /sessions/{id} returns the CalibrationSessionResource at the
+        // top level (no `session` wrapper) — same shape the review page uses.
+        const session = res.data;
 
         // Session must still be editable
         if (!session || !["draft", "rejected"].includes(session.status)) {
@@ -404,6 +417,14 @@ export default function NewCalibrationPage() {
         setSelectedInstrument(String(apiInstrumentId));
         setSelectedStandard(stds[0]?.id ? String(stds[0].id) : "");
         setSelectedStandard2(stds[1]?.id ? String(stds[1].id) : "");
+        // Unidades de torque persistidas en el borrador (fallback a las
+        // efectivas del backend para sesiones legacy).
+        setReadingUnit(
+          session.reading_unit ?? session.effective_reading_unit ?? "",
+        );
+        setReportUnit(
+          session.report_unit ?? session.effective_report_unit ?? "",
+        );
         setEnvironmentalData(meta);
         setCalibrationDate(
           session.calibration_date
@@ -474,6 +495,8 @@ export default function NewCalibrationPage() {
     setCalibrationDate(new Date().toISOString().split("T")[0]);
     setValidationErrors({});
     setSelectedStandard2("");
+    setReadingUnit("");
+    setReportUnit("");
     setActiveSessionId(null);
     setLastSavedAt(null);
     localStorage.removeItem(DRAFT_KEY);
@@ -524,6 +547,74 @@ export default function NewCalibrationPage() {
   );
   const procedureCode = matchedSchema?.code || "";
   const isStrategyImplemented = IMPLEMENTED_STRATEGIES.includes(procedureCode);
+
+  // ── Torque units: derived state ──────────────────────────────────────────
+  const isTorque = isSameCategory(selectedInst?.category, "torque");
+  const activeReadingUnit = tryParseTorqueUnit(readingUnit);
+
+  // Grid override for rendering only: torque column headers show the active
+  // reading unit (the transducer display unit). The schema itself is untouched
+  // and `buildPayload()` keeps using `grids` — the payload shape is unit-free.
+  const displayGrids: GridSchema[] =
+    isTorque && activeReadingUnit
+      ? grids.map((grid) => ({
+          ...grid,
+          columns: grid.columns.map((col) =>
+            col.unit && tryParseTorqueUnit(col.unit)
+              ? { ...col, unit: activeReadingUnit }
+              : col,
+          ),
+        }))
+      : grids;
+
+  // Reading-unit switch with data conversion: the entered grid values
+  // (nominal points and readings) are physical values expressed in the old
+  // display unit, so they are converted to the new one — exactly what the
+  // transducer would show after switching its display unit. 6 decimals keeps
+  // the round trip lossless at metrological resolutions.
+  const handleReadingUnitChange = useCallback(
+    (newUnit: string) => {
+      const from = tryParseTorqueUnit(readingUnit);
+      const to = tryParseTorqueUnit(newUnit);
+      setReadingUnit(newUnit);
+      if (!from || !to || from === to) return;
+
+      const convertNumber = (raw: string): string => {
+        const n = parseFloat(raw);
+        return Number.isFinite(n)
+          ? String(parseFloat(convertTorque(n, from, to).toFixed(6)))
+          : raw;
+      };
+
+      setGridDataMap((prev) => {
+        const next: Record<string, GridData> = {};
+        for (const [gridId, gridData] of Object.entries(prev)) {
+          const convertedGrid: GridData = {};
+          for (const [rowIdx, row] of Object.entries(gridData)) {
+            const newRow: Record<string, string> = {};
+            for (const [key, val] of Object.entries(row)) {
+              if (!val) {
+                newRow[key] = val;
+              } else if (key === "nominal_value") {
+                newRow[key] = convertNumber(val);
+              } else if (key === "readings" || key === "reading") {
+                newRow[key] = val
+                  .split(",")
+                  .map((s) => convertNumber(s.trim()))
+                  .join(",");
+              } else {
+                newRow[key] = val;
+              }
+            }
+            convertedGrid[Number(rowIdx)] = newRow;
+          }
+          next[gridId] = convertedGrid;
+        }
+        return next;
+      });
+    },
+    [readingUnit, setReadingUnit, setGridDataMap],
+  );
 
   // Filter standards by selected instrument's category
   const filteredStandards: Standard[] = selectedInst
@@ -599,10 +690,26 @@ export default function NewCalibrationPage() {
   }, [selectedInstrument, procedureCode, humidityStandards]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-preload metadata fields from instrument + standard in DB ──────────
-  // Runs whenever both instrument and standard are resolved (selectedInst/selectedStd change).
-  // Only fills fields still empty — does NOT overwrite user edits.
+  // Runs whenever the instrument and/or standard are resolved
+  // (selectedInst/selectedStd change). Only fills fields still empty — does
+  // NOT overwrite user edits.
   useEffect(() => {
-    if (!selectedInst || !selectedStd) return;
+    if (!selectedInst) return;
+
+    // ── Torque unit defaults ───────────────────────────────────────────────
+    // Reading = unidad del patrón/transductor seleccionado (el técnico lee su
+    // display) si es una unidad de torque válida; si no, la del instrumento.
+    // Report = unidad nativa del instrumento (lo que espera el cliente).
+    // Solo rellena valores vacíos: nunca pisa una elección explícita del
+    // usuario ni las unidades restauradas de un borrador.
+    if (isSameCategory(selectedInst.category, "torque")) {
+      const instrumentUnit = tryParseTorqueUnit(selectedInst.unit) ?? "N·m";
+      const standardUnit = tryParseTorqueUnit(selectedStd?.unit);
+      setReadingUnit((prev) => prev || standardUnit || instrumentUnit);
+      setReportUnit((prev) => prev || instrumentUnit);
+    }
+
+    if (!selectedStd) return;
 
     setStandardSlopeSource(selectedStd.uncertainty_slope_source ?? null);
 
@@ -694,6 +801,50 @@ export default function NewCalibrationPage() {
   const handleGridChange = useCallback((gridId: string, data: GridData) => {
     setGridDataMap((prev) => ({ ...prev, [gridId]: data }));
   }, []);
+
+  // ─── Nominal points prefill (torque) ──────────────────────────────────────
+  // nominal = nominal_capacity × %/100, expresado en la unidad de lectura.
+  // La capacidad nominal es una especificación del instrumento y se declara en
+  // su unidad nativa — por eso se convierte instrumento → lectura aquí.
+  // Solo rellena celdas vacías: nunca pisa lo que el técnico ya cargó.
+  useEffect(() => {
+    if (!isTorque || grids.length === 0) return;
+    const capacity = parseFloat(environmentalData.nominal_capacity || "");
+    if (!Number.isFinite(capacity) || capacity <= 0) return;
+    const from = tryParseTorqueUnit(selectedInst?.unit);
+    const to = activeReadingUnit;
+    if (!from || !to) return;
+
+    setGridDataMap((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const grid of grids) {
+        const percentages = grid.rows_config?.percentages;
+        if (!percentages?.length) continue;
+        const gridData = { ...(next[grid.id] ?? {}) };
+        let gridChanged = false;
+        percentages.forEach((pct, idx) => {
+          const row = { ...(gridData[idx] ?? {}) };
+          if (row.nominal_value) return;
+          const nominal = convertTorque((capacity * pct) / 100, from, to);
+          row.nominal_value = String(parseFloat(nominal.toFixed(6)));
+          gridData[idx] = row;
+          gridChanged = true;
+        });
+        if (gridChanged) {
+          next[grid.id] = gridData;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [
+    isTorque,
+    grids,
+    environmentalData.nominal_capacity,
+    selectedInst?.unit,
+    activeReadingUnit,
+  ]);
 
   // ─── Build raw payload matching what the backend Strategy expects ───
   const buildPayload = useCallback((): RawPayload => {
@@ -852,6 +1003,10 @@ export default function NewCalibrationPage() {
         : null,
       procedure_schema_id: matchedSchema?.id,
       category: selectedInst?.category || "",
+      // Torque only — backend fuerza null en otras categorías.
+      ...(isTorque
+        ? { reading_unit: readingUnit || null, report_unit: reportUnit || null }
+        : {}),
       ambient_temperature: parseFloat(
         environmentalData.air_temperature || "20",
       ),
@@ -889,6 +1044,9 @@ export default function NewCalibrationPage() {
       calibrationDate,
       receptionDate,
       nextCalibrationDate,
+      isTorque,
+      readingUnit,
+      reportUnit,
     ],
   );
 
@@ -959,6 +1117,13 @@ export default function NewCalibrationPage() {
       try {
         await api.put(`/calibration/sessions/${activeSessionId}`, {
           raw_payload: buildPayload(),
+          // Las unidades viajan junto al payload: al cambiar la unidad de
+          // lectura se convierten los valores de la grilla, y ambas cosas
+          // deben persistir en el mismo request (si no, el backend
+          // interpretaría los valores convertidos con la unidad vieja).
+          ...(isTorque
+            ? { reading_unit: readingUnit || null, report_unit: reportUnit || null }
+            : {}),
         });
         setLastSavedAt(new Date());
       } catch {
@@ -967,7 +1132,7 @@ export default function NewCalibrationPage() {
         setAutoSaving(false);
       }
     }, 2000);
-  }, [activeSessionId, buildPayload]);
+  }, [activeSessionId, buildPayload, isTorque, readingUnit, reportUnit]);
 
   useEffect(() => {
     if (!activeSessionId || Object.keys(gridDataMap).length === 0) return;
@@ -1102,6 +1267,9 @@ export default function NewCalibrationPage() {
 
       await api.put(`/calibration/sessions/${sessionId}`, {
         raw_payload: payload,
+        ...(isTorque
+          ? { reading_unit: readingUnit || null, report_unit: reportUnit || null }
+          : {}),
       });
       setLastSavedAt(new Date());
       toast.success(`Borrador guardado (Sesión #${sessionId})`);
@@ -1138,6 +1306,14 @@ export default function NewCalibrationPage() {
         );
         sessionId = createRes.data.session.id;
         setActiveSessionId(sessionId);
+      } else if (isTorque) {
+        // El borrador pudo crearse con otra unidad de lectura/informe: el
+        // cálculo se ejecuta con la unidad persistida, así que se sincroniza
+        // antes de enviar a revisión.
+        await api.put(`/calibration/sessions/${sessionId}`, {
+          reading_unit: readingUnit || null,
+          report_unit: reportUnit || null,
+        });
       }
 
       const submitRes = await api.post(
@@ -1648,6 +1824,86 @@ export default function NewCalibrationPage() {
             )}
           </AnimatePresence>
 
+          {/* ── Torque units (ISO/IEC 17025 §6.5) ── */}
+          <AnimatePresence>
+            {selectedInst && isTorque && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                animate={{ opacity: 1, height: "auto", marginTop: 16 }}
+                exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                className="overflow-hidden"
+              >
+                <div
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-md"
+                  style={{
+                    backgroundColor: "var(--bg-app)",
+                    border: "1px solid var(--border-color)",
+                  }}
+                >
+                  <div className="space-y-1">
+                    <label
+                      className="text-[10px] font-medium uppercase tracking-wider block"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Unidad de Lectura (transductor)
+                    </label>
+                    <select
+                      value={readingUnit}
+                      onChange={(e) => handleReadingUnitChange(e.target.value)}
+                      className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono"
+                    >
+                      {readingUnit === "" && (
+                        <option value="">— Seleccione —</option>
+                      )}
+                      {TORQUE_UNITS.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                    <p
+                      className="text-[9px] leading-tight"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Las lecturas y la grilla se cargan en esta unidad, tal
+                      como las muestra el display del transductor patrón.
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <label
+                      className="text-[10px] font-medium uppercase tracking-wider block"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Unidad de Informe (certificado)
+                    </label>
+                    <select
+                      value={reportUnit}
+                      onChange={(e) => setReportUnit(e.target.value)}
+                      className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono"
+                    >
+                      {reportUnit === "" && (
+                        <option value="">— Seleccione —</option>
+                      )}
+                      {TORQUE_UNITS.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                    <p
+                      className="text-[9px] leading-tight"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      El certificado informa los resultados en esta unidad. La
+                      conformidad se evalúa siempre antes de la conversión
+                      (§7.8.6).
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Schema loading */}
           {loadingSchema && (
             <div
@@ -1757,6 +2013,13 @@ export default function NewCalibrationPage() {
                             ...environmentalData,
                             [req.field]: v,
                           });
+                        // La capacidad nominal es una especificación del
+                        // instrumento: se declara en su unidad nativa, no en la
+                        // unidad del esquema (el backend la normaliza después).
+                        const displayUnit =
+                          isTorque && req.field === "nominal_capacity"
+                            ? (selectedInst?.unit ?? req.unit)
+                            : req.unit;
 
                         return (
                           <div key={idx} className="space-y-1">
@@ -1826,9 +2089,9 @@ export default function NewCalibrationPage() {
                                   step={isNumber ? "any" : undefined}
                                   className="w-full h-8 px-2.5 rounded input-theme text-xs font-mono pr-10"
                                 />
-                                {req.unit && (
+                                {displayUnit && (
                                   <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-medium opacity-40">
-                                    {req.unit}
+                                    {displayUnit}
                                   </span>
                                 )}
                               </div>
@@ -2432,7 +2695,7 @@ export default function NewCalibrationPage() {
 
               {/* Render each grid from JSON Schema — each gets its own scroll anchor */}
               <div className="space-y-8">
-                {grids.map((grid: GridSchema, gIdx: number) => (
+                {displayGrids.map((grid: GridSchema, gIdx: number) => (
                   <div key={grid.id} id={`cal-section-grid-${grid.id}`}>
                     <DynamicGrid
                       grid={grid}
@@ -2537,11 +2800,15 @@ export default function NewCalibrationPage() {
                   (Strategy {procedureCode}). Sesión congelada e inmutable.
                 </p>
 
-                {/* Unified matrix table — auto-detects instrument type */}
+                {/* Unified matrix table — auto-detects instrument type.
+                    En torque el presupuesto llega en la unidad de lectura
+                    (unidad de cálculo), no en la nativa del instrumento. */}
                 <UnifiedResultsTable
                   points={budgetResult.points || []}
                   functions={budgetResult.functions}
-                  unit={selectedInst?.unit}
+                  unit={
+                    isTorque ? readingUnit || selectedInst?.unit : selectedInst?.unit
+                  }
                   procedureCode={procedureCode}
                 />
 

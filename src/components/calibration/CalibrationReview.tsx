@@ -21,12 +21,18 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import type {
   CalibrationSession,
-  Instrument,
   Standard,
   StandardSnapshot,
   UncertaintySource,
 } from "@/types/calibration";
 import { formatMeasured, formatUncertainty } from "@/lib/metrologyFormat";
+import { isSameCategory } from "@/lib/categoryUtils";
+import {
+  TORQUE_UNITS,
+  convertTorque,
+  convertTorquePoint,
+  tryParseTorqueUnit,
+} from "@/lib/torqueUnits";
 import { MathText, DegreesOfFreedom } from "@/components/calibration/MathText";
 import {
   RESULT_COLUMNS,
@@ -72,6 +78,11 @@ export default function CalibrationReview({
   const [approvedCertId, setApprovedCertId] = useState<number | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  // Torque only: display unit override for the results view. null = use the
+  // session's persisted report unit.
+  const [displayUnitOverride, setDisplayUnitOverride] = useState<string | null>(
+    null,
+  );
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
 
@@ -179,6 +190,30 @@ export default function CalibrationReview({
     }
   };
 
+  // Torque only: switch the results display unit. The conversion is always
+  // applied client-side (view); additionally, when the session is still
+  // mutable (draft/rejected) the choice is persisted as the new report unit.
+  const sessionMutable =
+    session?.status === "draft" || session?.status === "rejected";
+  const handleUnitChange = async (unit: string) => {
+    setDisplayUnitOverride(unit);
+    if (!session || !sessionMutable) return;
+    try {
+      await api.put(`/calibration/sessions/${session.id}`, {
+        report_unit: unit,
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["calibrationSession", id],
+      });
+      toast.success(`Unidad de informe actualizada a ${unit}`);
+    } catch (err: unknown) {
+      const axiosErr = err as { userMessage?: string };
+      toast.error(
+        axiosErr.userMessage || "No se pudo actualizar la unidad de informe",
+      );
+    }
+  };
+
   /* ── Flatten results from any strategy shape ── */
   const allResults: BudgetPointWithFunction[] = (() => {
     if (!session) return [];
@@ -206,12 +241,72 @@ export default function CalibrationReview({
       | undefined,
     session?.procedure_schema?.code,
   );
-  const tableUnit =
+
+  /* ── Torque units ──────────────────────────────────────────────────────
+   * The calculation runs in the reading unit (what the technician read on the
+   * transducer). The results view displays in the report unit (what the
+   * certificate uses), and the values are converted here — raw, never rounded
+   * — with exact SI factors. The conformity verdict was already evaluated by
+   * the backend in the calculation unit and is never re-computed after the
+   * conversion (ISO/IEC 17025 §7.8.6).
+   */
+  const isTorque = isSameCategory(
+    (session?.procedure_schema?.category ?? session?.category) as
+      | string
+      | undefined,
+    "torque",
+  );
+  const instrumentUnitLabel = session?.instrument?.unit ?? "";
+  const calcUnitLabel =
+    session?.effective_reading_unit ||
     session?.calculated_results?.unit ||
     session?.final_results?.unit ||
-    session?.instrument?.unit ||
+    instrumentUnitLabel ||
     "";
-  const tableResolution = session?.instrument?.resolution ?? null;
+  const reportUnitLabel =
+    session?.effective_report_unit || instrumentUnitLabel || "";
+  const activeDisplayLabel = isTorque
+    ? (displayUnitOverride ?? reportUnitLabel)
+    : calcUnitLabel;
+
+  const calcUnit = isTorque ? tryParseTorqueUnit(calcUnitLabel) : null;
+  const displayUnit = isTorque ? tryParseTorqueUnit(activeDisplayLabel) : null;
+  const instrumentUnit = isTorque ? tryParseTorqueUnit(instrumentUnitLabel) : null;
+
+  // Displayed results: reading unit → display unit (torque only). Always maps
+  // so `display_resolution` (coarser of converted resolution and U decimal
+  // place) is attached even when both units coincide.
+  const displayResults: BudgetPointWithFunction[] =
+    isTorque && calcUnit && displayUnit
+      ? allResults.map((p) =>
+          convertTorquePoint(
+            p,
+            calcUnit,
+            displayUnit,
+            session?.instrument?.resolution != null && instrumentUnit
+              ? convertTorque(
+                  session.instrument.resolution,
+                  instrumentUnit,
+                  displayUnit,
+                )
+              : null,
+          ),
+        )
+      : allResults;
+
+  const tableUnit = isTorque ? activeDisplayLabel : calcUnitLabel;
+  const tableResolution = (() => {
+    const res = session?.instrument?.resolution ?? null;
+    if (!isTorque || !instrumentUnit || !displayUnit || res === null) return res;
+    return convertTorque(res, instrumentUnit, displayUnit);
+  })();
+  // EMP is an instrument spec (native unit) → convert to the display unit so
+  // the conformity summary reads in the same unit as the displayed results.
+  const displayEmp = (() => {
+    const emp = session?.instrument?.emp ?? null;
+    if (!isTorque || !instrumentUnit || !displayUnit || emp === null) return emp;
+    return convertTorque(emp, instrumentUnit, displayUnit);
+  })();
 
   const hasDetailedSources = allResults.some(
     (r) => (r.uncertainty_sources?.length ?? 0) > 0,
@@ -680,22 +775,60 @@ export default function CalibrationReview({
               exit={{ opacity: 0, y: -20, transition: { duration: 0.2 } }}
               transition={{ duration: 0.35 }}
             >
-              <h3
-                className="text-xs font-semibold mb-3 uppercase tracking-wider"
-                style={{ color: "var(--text-main)" }}
-              >
-                4. Resultados de Incertidumbre
-              </h3>
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <h3
+                  className="text-xs font-semibold uppercase tracking-wider"
+                  style={{ color: "var(--text-main)" }}
+                >
+                  4. Resultados de Incertidumbre
+                </h3>
+                {isTorque && (
+                  <label
+                    className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider"
+                    style={{ color: "var(--text-muted)" }}
+                    title={
+                      sessionMutable
+                        ? "Unidad en la que se informan los resultados; se guarda como unidad de informe del certificado"
+                        : "Vista de solo lectura: la unidad de informe ya quedó fijada en la sesión"
+                    }
+                  >
+                    Ver en
+                    <select
+                      value={activeDisplayLabel}
+                      onChange={(e) => handleUnitChange(e.target.value)}
+                      className="h-7 px-2 rounded input-theme text-xs font-mono"
+                    >
+                      {TORQUE_UNITS.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+              {isTorque && (
+                <p
+                  className="text-[10px] mb-2 leading-relaxed"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Cálculo en <strong>{calcUnitLabel}</strong> · informe en{" "}
+                  <strong>{activeDisplayLabel}</strong>. La conformidad se
+                  evaluó en la unidad de cálculo antes de la conversión
+                  (ISO/IEC 17025 §7.8.6); la conversión usa factores SI exactos.
+                </p>
+              )}
               <ResultsTable
-                results={allResults}
+                results={displayResults}
                 tableType={tableType}
                 unit={tableUnit}
                 resolution={tableResolution}
               />
               {session.instrument && (
                 <ConformityAssessment
-                  results={allResults}
-                  instrument={session.instrument}
+                  results={displayResults}
+                  emp={displayEmp}
+                  unit={tableUnit}
                   resolution={tableResolution}
                 />
               )}
@@ -784,15 +917,11 @@ export default function CalibrationReview({
                 </p>
                 <AuditMathBreakdown
                   results={allResults}
-                  instrumentUnit={
-                    session?.calculated_results?.unit ||
-                    session?.instrument?.unit ||
-                    "mm"
-                  }
+                  instrumentUnit={calcUnitLabel || "mm"}
                 />
               </div>
 
-              {allResults.length > 0 && (
+              {displayResults.length > 0 && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -815,7 +944,7 @@ export default function CalibrationReview({
                     />
                   </div>
                   <ResultsTable
-                    results={allResults}
+                    results={displayResults}
                     tableType={tableType}
                     unit={tableUnit}
                     resolution={tableResolution}
@@ -1269,17 +1398,22 @@ const VERDICT_STYLES: Record<
 
 function ConformityAssessment({
   results,
-  instrument,
+  emp,
+  unit,
   resolution,
 }: {
   results: BudgetPointWithFunction[];
-  instrument: Instrument;
+  /** EMP already expressed in the display unit (it is an instrument spec in its native unit). */
+  emp: number | null;
+  unit: string;
   resolution: number | null;
 }) {
   if (!results.length) return null;
-  const emp = instrument.emp;
-  const unit = instrument.unit ?? "";
 
+  // The verdict is evaluated on the displayed (already converted) values. The
+  // comparison |Error| + U ≤ EMP is scale-invariant because error, U and EMP
+  // are converted with the same exact factor, so this yields exactly the same
+  // verdict the backend froze in the calculation unit (ISO/IEC 17025 §7.8.6).
   const rows = results.map((r) => {
     const error = r.error;
     const U = r.expanded_uncertainty_mm ?? r.expanded_uncertainty;
@@ -1311,7 +1445,7 @@ function ConformityAssessment({
       <p className="text-[10px] mb-3" style={{ color: "var(--text-muted)" }}>
         Criterio: |Error| + U ≤ EMP — ISO 17025 §7.8.6.
         {emp != null && emp > 0
-          ? ` EMP = ± ${emp} ${unit}.`
+          ? ` EMP = ± ${formatUncertainty(emp)} ${unit}.`
           : " El instrumento no tiene EMP definido; no es posible declarar conformidad por punto."}
       </p>
 
@@ -1375,8 +1509,8 @@ function ConformityAssessment({
                   ? Math.abs(row.error) + Math.abs(row.U)
                   : undefined;
               const label = row.point.function
-                ? `${formatMeasured(row.point.nominal_value, resolution)} (${row.point.function})`
-                : formatMeasured(row.point.nominal_value, resolution);
+                ? `${formatMeasured(row.point.nominal_value, row.point.display_resolution ?? resolution)} (${row.point.function})`
+                : formatMeasured(row.point.nominal_value, row.point.display_resolution ?? resolution);
               return (
                 <tr
                   key={`${row.point.nominal_value}-${row.point.function ?? "base"}`}
@@ -1384,7 +1518,10 @@ function ConformityAssessment({
                   <td className="px-3 py-2 font-mono">{label}</td>
                   <td className="px-3 py-2 text-right font-mono">
                     {row.error !== undefined
-                      ? formatMeasured(Math.abs(row.error), resolution)
+                      ? formatMeasured(
+                          Math.abs(row.error),
+                          row.point.display_resolution ?? resolution,
+                        )
                       : "—"}
                   </td>
                   <td className="px-3 py-2 text-right font-mono">
@@ -1394,7 +1531,9 @@ function ConformityAssessment({
                     {band !== undefined ? formatUncertainty(band) : "—"}
                   </td>
                   <td className="px-3 py-2 text-right font-mono">
-                    {emp != null && emp > 0 ? `± ${emp}` : "—"}
+                    {emp != null && emp > 0
+                      ? `± ${formatUncertainty(emp)}`
+                      : "—"}
                   </td>
                   <td className="px-3 py-2 text-center">
                     <span

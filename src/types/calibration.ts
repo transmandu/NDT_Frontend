@@ -131,6 +131,13 @@ export interface BudgetPoint {
   instrument?: number;
   instrument_bar?: number;
   uncertainty_sources?: UncertaintySource[];
+
+  /**
+   * Per-point display resolution (torque): coarser of the converted instrument
+   * resolution and the converted-U decimal place (GUM §7.2.6). Computed by
+   * `convertTorquePoint` when the results are converted for display.
+   */
+  display_resolution?: number;
 }
 
 export interface BudgetPreview {
@@ -228,6 +235,14 @@ export interface CalibrationSession {
   procedure_schema_id: number;
   certificate_code: string | null;
   category: string;
+  /** Torque only: unit in which the technician enters the readings (transducer display). null for legacy/other categories. */
+  reading_unit?: string | null;
+  /** Torque only: unit in which the certificate reports the results. null for legacy/other categories. */
+  report_unit?: string | null;
+  /** Backend-resolved reading unit (falls back to the instrument unit for legacy sessions). */
+  effective_reading_unit?: string | null;
+  /** Backend-resolved report unit (falls back to the instrument unit for legacy sessions). */
+  effective_report_unit?: string | null;
   ambient_temperature: number;
   ambient_humidity: number;
   ambient_pressure: number | null;
